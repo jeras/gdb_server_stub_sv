@@ -23,7 +23,7 @@ source riscv_gdb_stub.cmd
 (gdb) set logging enabled on
 (gdb) set debug remote 1
 (gdb) set arch riscv:rv32
-(gdb) target remote riscv_gdb_stub
+(gdb) target remote gdb_server_stub_socket
 (gdb) set riscv numeric-register-names on
 (gdb) info registers
 (gdb) i r

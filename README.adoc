@@ -1,11 +1,14 @@
 = GDB server stub
 
-This is a GDB server stub written in SystemVerilog.
+This is a GDB server stub written in SystemVerilog (and a bit of DPI-C).
+It is primarily designed for RISC-V standard processors,
+but it can be modified to connect to other processor families.
 
 Advantages:
 
 * can be used on RTL CPU without explicit debug functionality,
-* real time debugging (no simulation time is consumed by the debugger),
+* real time debugging, no simulation time is consumed by the debugger
+  (useful for bitbanging and real time interrupts),
 * read/write access to registers and memories using direct references,
 * hardware breakpoints/watchpoints.
 
@@ -20,37 +23,55 @@ Disadvantages/limitations:
   necessitating the use of `always` instead of `always_ff` to implement them,
   this results in missing simulator optimizations and subsequently slower simulations.
 
-TODO (simple):
+== Terminology
 
-* add support for more packets (`q*` queries, `v*`, ...),
-  * query for capabilities,
-  * advanced mode,
-  * mode without acknowledge,
-* expand support for additional formats of partially supported packets,
-* write regression tests (simple but a lot of work),
-* integration with GUI tools,
-* support for TCP sockets,
-* support for handling illegal instructions,
-* backtracing,
-* support for binary memory access packets (`x`/`X`),
-  but this is not really necessary,
-* workarounds for Verilator issues,
-* ...
+.Terminology
+[%autowidth]
+|===
+| acronym | definition
 
-TODO (difficult):
+| GRP     | General Purpose Registers (register file)
+| PC      | Program Counter
+| FPR     | Floating-Point Registers (register file)
+| CSR     | Configuration Status Registers
 
-* understand packet patterns used by GDB,
-  * what state the system should start in (reset/running/breakpoint/...)?,
-  * inserting/removing breakpoints/watchpoints and relation to step/continue,
-  * software breakpoints inserting/removing is done with `z/Z` packets or `m/M` (memory access),
-  * I/C (32/16 bit EBREAK instruction) breakpoints.
-* check whether there are race conditions to fix,
-* the code currently only runs in Questa, try to port to other simulators,
-* generalize access to more than one memory, and additional registers (CSR)
-  (full generalization requires the SystemVerilog simulator to support the `alias` keyword),
-* ...
+| HDL     | https://en.wikipedia.org/wiki/Hardware_description_language[Hardware Description Language]
+| RTL     | https://en.wikipedia.org/wiki/Register-transfer_level[Register-transfer level]
 
-== Implementation
+| ROM     | https://en.wikipedia.org/wiki/Read-only_memory[Read-only memory]
+| RAM     | https://en.wikipedia.org/wiki/Random-access_memory[Random-access memory]
+|===
+
+== Integration
+
+The GDB server stub is connected to SoC signals:
+
+* following the system clock and driving the reset,
+* monitoring CPU IFU/LSU interfaces to trigger breakpoints/watchpoints
+  (can also be used to detect illegal instruction execution),
+* register files (GPR/FPR) and individual registers (PC/CSR) inside the CPU
+  should be connected using bidirectional _hierarchical path names_,
+* memory arrays inside memory modules
+  should be connected using bidirectional _hierarchical path names_.
+
+The connection to a GDB/LLDB client uses a Unix or TCP server socket.
+
+.Integration with a CPU block diagram
+image::doc/block_diagram.svg[Integration with a CPU block diagram]
+
+=== Parameters
+
+
+
+https://sourceware.org/gdb/current/onlinedocs/gdb.html/Memory-Map-Format.html
+
+https://sourceware.org/gdb/current/onlinedocs/gdb.html/Target-Descriptions.html#Target-Descriptions
+
+https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html#General-Query-Packets
+
+=== Ports
+
+== Implementation details
 
 The implementation is a mix of `DPI-C` and pure SystemVerilog code.
 The `DPI-C` code implements minimal socket functionality,
@@ -77,6 +98,38 @@ while periodically (every clock cycle) checking for GDB commands.
 
 
 
+== Development
+
+TODO (simple):
+
+* add support for more packets (`q*` queries, `v*`, ...),
+  * query for capabilities,
+  * advanced mode,
+  * mode without acknowledge,
+* expand support for additional formats of partially supported packets,
+* write regression tests (simple but a lot of work),
+* integration with GUI tools,
+* support for TCP sockets,
+* support for handling illegal instructions,
+* backtracing,
+* support for binary memory access packets (`x`/`X`),
+  but this is not really necessary,
+* workarounds for Verilator issues,
+* LLDB support,
+* ...
+
+TODO (difficult):
+
+* understand packet patterns used by GDB,
+  * what state the system should start in (reset/running/breakpoint/...)?,
+  * inserting/removing breakpoints/watchpoints and relation to step/continue,
+  * software breakpoints inserting/removing is done with `z/Z` packets or `m/M` (memory access),
+  * I/C (32/16 bit EBREAK instruction) breakpoints.
+* check whether there are race conditions to fix,
+* the code currently only runs in Questa, try to port to other simulators,
+* generalize access to more than one memory, and additional registers (CSR)
+  (full generalization requires the SystemVerilog simulator to support the `alias` keyword),
+* ...
 
 == References
 
