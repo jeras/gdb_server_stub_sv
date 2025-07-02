@@ -7,11 +7,22 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 module gdb_server_stub #(
+  // 8/16/32/64 bit CPU selection
   parameter  int unsigned XLEN = 32,
-  parameter  type         SIZE_T = int unsigned,  // could be longint, but it results in warnings
+  parameter  type         SIZE_T = int unsigned,  // could be longint (RV64), but it results in warnings
+  // Unix/TCP socket
   parameter  string       SOCKET = "gdb_server_stub_socket",
+  // XML target description
+  parameter  string       XML_TARGET = "",  // TODO
+  // registers
+  parameter  int unsigned GLEN = 32,  // GPR number can be 16 for RISC-V E extension (embedded)
+  parameter  string       XML_REGISTERS = "",  // TODO
   // memory
-  parameter  int unsigned MEM_SIZ = 2**16,
+  parameter  string       XML_MEMORY = "",
+  parameter  SIZE_T       MLEN = 8,       // memory unit width byte/half/word/double (8-bit byte by default)
+  parameter  SIZE_T       MSIZ = 2**16,   // memory size
+  parameter  SIZE_T       MBGN = 0,       // memory beginning
+  parameter  SIZE_T       MEND = MSIZ-1,  // memory end
   // DEBUG parameters
   parameter  bit DEBUG_LOG = 1'b1
 )(
@@ -19,10 +30,10 @@ module gdb_server_stub #(
   input  logic clk,  // clock
   output logic rst,  // reset
   // registers
-  ref    logic [XLEN-1:0] gpr [0:32-1],
+  ref    logic [XLEN-1:0] gpr [0:GLEN-1],
   ref    logic [XLEN-1:0] pc,
   // memories
-  ref    logic    [8-1:0] mem [0:2**16-1],
+  ref    logic [MLEN-1:0] mem [MBGN:MEND],
   // IFU interface (instruction fetch unit)
   input  logic            ifu_trn,  // transfer
   input  logic [XLEN-1:0] ifu_adr,  // address
@@ -269,9 +280,6 @@ module gdb_server_stub #(
 
 //    $display("DBG: gdb_mem_read: adr = %08x, len=%08x", adr, len);
 
-    // TODO: handle individual memory instances
-    adr = adr[$clog2(MEM_SIZ):0];
-
     // read memory
     pkt = {len{"XX"}};
     for (SIZE_T i=0; i<len; i++) begin
@@ -315,9 +323,6 @@ module gdb_server_stub #(
     // remove the header from the packet, only data remains
     dat = pkt.substr(pkt.len() - 2*len, pkt.len() - 1);
 //    $display("DBG: gdb_mem_write: dat = %s", dat);
-
-    // TODO: handle individual memory instances
-    adr = adr[$clog2(MEM_SIZ):0];
 
     // write memory
     for (SIZE_T i=0; i<len; i++) begin
@@ -411,14 +416,14 @@ module gdb_server_stub #(
   function automatic int gdb_reg_readall ();
     int status;
     string pkt;
-    logic [XLEN-1:0] val;
+    bit [XLEN-1:0] val;  // 2-state so GDB does not misinterpret 'x
 
     // read packet
     status = gdb_get_packet(pkt);
 
     // GPR
     pkt = "";
-    for (int unsigned i=0; i<32; i++) begin
+    for (int unsigned i=0; i<GLEN; i++) begin
       // swap byte order since they are sent LSB first
       val = {<<8{gpr[i]}};
       case (XLEN)
@@ -437,14 +442,14 @@ module gdb_server_stub #(
     // send response
     status = gdb_send_packet(pkt);
 
-    return(32+1);
+    return(GLEN+1);
   endfunction: gdb_reg_readall
 
   function automatic int gdb_reg_writeall ();
     string pkt;
     int status;
     int unsigned len = XLEN/8*2;
-    logic [XLEN-1:0] val;
+    bit [XLEN-1:0] val;
 
     // read packet
     status = gdb_get_packet(pkt);
@@ -452,7 +457,7 @@ module gdb_server_stub #(
     pkt = pkt.substr(1, pkt.len()-1);
 
     // GPR
-    for (int unsigned i=0; i<32; i++) begin
+    for (int unsigned i=0; i<GLEN; i++) begin
 `ifdef VERILATOR
       status = $sscanf(pkt.substr(i*len, i*len+len-1), "%h", val);
 `else
@@ -479,7 +484,7 @@ module gdb_server_stub #(
     // send response
     status = gdb_send_packet("OK");
 
-    return(32+1);
+    return(GLEN+1);
   endfunction: gdb_reg_writeall
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -490,7 +495,7 @@ module gdb_server_stub #(
     int status;
     string pkt;
     int unsigned idx;
-    logic [XLEN-1:0] val;
+    bit [XLEN-1:0] val;  // 2-state so GDB does not misinterpret 'x
 
     // read packet
     status = gdb_get_packet(pkt);
@@ -498,7 +503,7 @@ module gdb_server_stub #(
     // register index
     status = $sscanf(pkt, "p%h", idx);
 
-    if (idx<32) begin
+    if (idx<GLEN) begin
       // GPR
       // swap byte order since they are sent LSB first
       val = {<<8{gpr[idx]}};
@@ -542,7 +547,7 @@ module gdb_server_stub #(
 `endif
 
     // write registers
-    if (idx<32) begin
+    if (idx<GLEN) begin
       // GPR
       // swap byte order since they are sent LSB first
       gpr[idx] = {<<8{val}};
@@ -816,7 +821,7 @@ module gdb_server_stub #(
     state = RESET;
 
     // open character device for R/W
-    fd = server_start("gdb_server_stub");
+    fd = server_start(SOCKET);
     $display("DEBUG: fd = '%08h'.", fd);
 
     // check if device was found

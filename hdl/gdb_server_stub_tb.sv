@@ -7,16 +7,32 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 module gdb_server_stub_tb #(
+  // 8/16/32/64 bit CPU selection
   parameter  int unsigned XLEN = 32,
-  parameter  type         SIZE_T = int unsigned,  // could be longint, but it results in warnings
+  parameter  type         SIZE_T = int unsigned,  // could be longint (RV64), but it results in warnings
+  // Unix/TCP socket
   parameter  string       SOCKET = "gdb_server_stub_socket",
+  // XML target description
+  parameter  string       XML_TARGET = "",     // TODO
+  // registers
+  parameter  int unsigned GLEN = 32,           // GPR number can be 16 for RISC-V E extension (embedded)
+  parameter  string       XML_REGISTERS = "",  // TODO
   // memory
-  parameter  int unsigned MEM_SIZ = 2**16,
+  parameter  string       XML_MEMORY = "",     // TODO
+  parameter  SIZE_T       MLEN = 8,            // memory unit width byte/half/word/double (8-bit byte by default)
+  parameter  SIZE_T       MSIZ = 2**16,        // memory size
+  parameter  SIZE_T       MBGN = 0,            // memory beginning
+  parameter  SIZE_T       MEND = MSIZ-1,       // memory end
   // DEBUG parameters
   parameter  bit DEBUG_LOG = 1'b1
 );
 
   import socket_dpi_pkg::*;
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+  localparam logic [XLEN-1:0] PC0 = 32'h8000_0000;
 
 ///////////////////////////////////////////////////////////////////////////////
 // local signals
@@ -62,16 +78,16 @@ module gdb_server_stub_tb #(
 ///////////////////////////////////////////////////////////////////////////////
 
   // GPR
-  logic [XLEN-1:0] gpr [0:32-1] = '{default: '0};
+  logic [XLEN-1:0] gpr [0:GLEN-1];
   // PC
-  logic [XLEN-1:0] pc = '0;
+  logic [XLEN-1:0] pc;
 
   // memory
-  logic [8-1:0] mem [0:MEM_SIZ-1];
+  logic [8-1:0] mem [0:MSIZ-1];
 
   always @(posedge clk, posedge rst)
   if (rst) begin
-    pc <= 32'h8000_0000;
+    pc <= PC0;
   end else begin
     pc <= pc+4;
 //    $display("DBG: mem[%08h] = %p", pc, mem[pc[$clog2(MEM_SIZ):0]+:4]);
@@ -89,13 +105,23 @@ module gdb_server_stub_tb #(
 ///////////////////////////////////////////////////////////////////////////////
 
   gdb_server_stub #(
-    .XLEN   (XLEN  ),
-    .SIZE_T (SIZE_T),
-    .SOCKET (SOCKET),
-    // memories
-    .MEM_SIZ (MEM_SIZ),
+    // 8/16/32/64 bit CPU selection
+    .XLEN          (XLEN  ),
+    .SIZE_T        (SIZE_T),
+    // Unix/TCP socket
+    .SOCKET        (SOCKET),
+    // XML target description
+    .XML_TARGET    (XML_TARGET),
+    // registers
+    .GLEN          (GLEN),
+    .XML_REGISTERS (XML_REGISTERS),
+    // memory
+    .XML_MEMORY    (XML_MEMORY),
+    .MLEN          (MLEN),
+    .MBGN          (PC0),
+    .MEND          (PC0+MSIZ-1),
     // DEBUG parameters
-    .DEBUG_LOG (DEBUG_LOG)
+    .DEBUG_LOG     (DEBUG_LOG)
   ) stub (
     // system signals
     .clk     (clk),
