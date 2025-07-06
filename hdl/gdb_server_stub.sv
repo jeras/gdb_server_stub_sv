@@ -68,12 +68,12 @@ module gdb_server_stub #(
     SIGEMT  = 8'd07,
     SIGFPE  = 8'd08,  // Erroneous arithmetic operation
     SIGKILL = 8'd09,  // Kill (cannot be caught or ignored)
-	  SIGBUS  = 8'd10,
-	  SIGSEGV = 8'd11,  // Invalid memory reference (address decoder error)
-	  SIGSYS  = 8'd12,
-	  SIGPIPE = 8'd13,  // Write on a pipe with no one to read it
-	  SIGALRM = 8'd14,  // Alarm clock
-	  SIGTERM = 8'd15,  // Termination signal
+    SIGBUS  = 8'd10,
+    SIGSEGV = 8'd11,  // Invalid memory reference (address decoder error)
+    SIGSYS  = 8'd12,
+    SIGPIPE = 8'd13,  // Write on a pipe with no one to read it
+    SIGALRM = 8'd14,  // Alarm clock
+    SIGTERM = 8'd15,  // Termination signal
     // reset
     RESET    = 8'h80,
     // running continuously
@@ -83,6 +83,26 @@ module gdb_server_stub #(
   } state_t;
 
   state_t state;
+
+///////////////////////////////////////////////////////////////////////////////
+// memory access
+///////////////////////////////////////////////////////////////////////////////
+
+  // TODO: for a multi memory and cache setup, there should be a decoder here
+
+  function automatic byte mem_read (
+    SIZE_T adr
+  );
+    mem_read = mem[adr/(MLEN/8)][8*(adr%(MLEN/8))+:8];
+  endfunction: mem_read
+
+  function automatic void mem_write (
+    SIZE_T adr,
+    byte   dat
+  );
+    mem[adr/(MLEN/8)][8*(adr%(MLEN/8))+:8] = dat;
+    $display("DBG: mem[%08x/(MLEN/8] = %08x", adr, mem[adr/(MLEN/8)]);
+  endfunction: mem_write
 
 ///////////////////////////////////////////////////////////////////////////////
 // GDB character get/put
@@ -284,7 +304,7 @@ module gdb_server_stub #(
     pkt = {len{"XX"}};
     for (SIZE_T i=0; i<len; i++) begin
       string tmp = "XX";
-      tmp = $sformatf("%02h", mem[adr+i]);
+      tmp = $sformatf("%02h", mem_read(adr+i));
       pkt[i*2+0] = tmp[0];
       pkt[i*2+1] = tmp[1];
     end
@@ -300,10 +320,11 @@ module gdb_server_stub #(
   function automatic int gdb_mem_write ();
     int code;
     string pkt;
-    string dat;
+    string str;
     int status;
     SIZE_T adr;
     SIZE_T len;
+    byte   dat;
 
     // read packet
     status = gdb_get_packet(pkt);
@@ -321,18 +342,19 @@ module gdb_server_stub #(
 //    $display("DBG: gdb_mem_write: adr = 'h%08h, len = 'd%0d", adr, len);
 
     // remove the header from the packet, only data remains
-    dat = pkt.substr(pkt.len() - 2*len, pkt.len() - 1);
-//    $display("DBG: gdb_mem_write: dat = %s", dat);
+    str = pkt.substr(pkt.len() - 2*len, pkt.len() - 1);
+//    $display("DBG: gdb_mem_write: str = %s", str);
 
     // write memory
     for (SIZE_T i=0; i<len; i++) begin
-//      $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, mem[adr+i]);
+//      $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, mem_read(adr+i));
 `ifdef VERILATOR
-      status = $sscanf(dat.substr(i*2, i*2+1), "%2h", mem[adr+i]);
+      status = $sscanf(str.substr(i*2, i*2+1), "%2h", dat);
 `else
-      status = $sscanf(dat.substr(i*2, i*2+1), "%h", mem[adr+i]);
+      status = $sscanf(str.substr(i*2, i*2+1), "%h", dat);
 `endif
-//      $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, mem[adr+i]);
+//      $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, mem_read(adr+i));
+      mem_write(adr+i, dat);
     end
 
     // send response
@@ -368,7 +390,7 @@ module gdb_server_stub #(
     // read memory
     pkt = {len{8'h00}};
     for (SIZE_T i=0; i<len; i++) begin
-      pkt[i] = mem[adr+i];
+      pkt[i] = mem_read(adr+i);
     end
 
     // send response
@@ -399,7 +421,7 @@ module gdb_server_stub #(
 
     // write memory
     for (SIZE_T i=0; i<len; i++) begin
-      mem[adr+i] = pkt[code+i];
+      mem_write(adr+i, pkt[code+i]);
     end
 
     // send response
