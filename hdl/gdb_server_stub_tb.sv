@@ -20,7 +20,7 @@ module gdb_server_stub_tb #(
   // memory
   parameter  string       XML_MEMORY = "",     // TODO
   parameter  SIZE_T       MLEN = 8,            // memory unit width byte/half/word/double (8-bit byte by default)
-  parameter  SIZE_T       MSIZ = 2**16,        // memory size
+  parameter  SIZE_T       MSIZ = 2**16,        // memory size (bytes)
   parameter  SIZE_T       MBGN = 0,            // memory beginning
   parameter  SIZE_T       MEND = MSIZ-1,       // memory end
   // DEBUG parameters
