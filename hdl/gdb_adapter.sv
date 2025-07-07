@@ -112,14 +112,14 @@ module gdb_adapter #(
     virtual function automatic byte mem_read (
       input  SIZE_T adr
     );
-      mem_read = mem[adr];
+      mem_read = mem[adr/(MLEN/8)][8*(adr%(MLEN/8))+:8];
     endfunction: mem_read
 
     virtual function automatic void mem_write (
       input  SIZE_T adr,
       input  byte   dat
     );
-      mem[adr] = dat;
+      mem[adr/(MLEN/8)][8*(adr%(MLEN/8))+:8] = dat;
     endfunction: mem_write
 
     virtual function automatic void jump (
