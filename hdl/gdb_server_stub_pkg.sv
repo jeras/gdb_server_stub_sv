@@ -1,60 +1,17 @@
 ///////////////////////////////////////////////////////////////////////////////
-// GDB server stub
+// GDB server stub package (contains packet parser, responder)
 //
 // Copyright 2025 Iztok Jeras <iztok.jeras@gmail.com>
 //
 // Licensed under CERN-OHL-P v2 or later
 ///////////////////////////////////////////////////////////////////////////////
 
-module gdb_server_stub #(
-  // 8/16/32/64 bit CPU selection
-  parameter  int unsigned XLEN = 32,
-  parameter  type         SIZE_T = int unsigned,  // could be longint (RV64), but it results in warnings
-  // Unix/TCP socket
-  parameter  string       SOCKET = "gdb_server_stub_socket",
-  // XML target description
-  parameter  string       XML_TARGET = "",  // TODO
-  // registers
-  parameter  int unsigned GLEN = 32,  // GPR number can be 16 for RISC-V E extension (embedded)
-  parameter  string       XML_REGISTERS = "",  // TODO
-  // memory
-  parameter  string       XML_MEMORY = "",
-  parameter  SIZE_T       MLEN = 8,       // memory unit width byte/half/word/double (8-bit byte by default)
-  parameter  SIZE_T       MSIZ = 2**16,   // memory size
-  parameter  SIZE_T       MBGN = 0,       // memory beginning
-  parameter  SIZE_T       MEND = MSIZ-1,  // memory end
-  // DEBUG parameters
-  parameter  bit DEBUG_LOG = 1'b1
-)(
-  // system signals
-  input  logic clk,  // clock
-  output logic rst,  // reset
-  // registers
-  ref    logic [XLEN-1:0] gpr [0:GLEN-1],
-  ref    logic [XLEN-1:0] pc,
-  // memories
-  ref    logic [MLEN-1:0] mem [MBGN:MEND],
-  // IFU interface (instruction fetch unit)
-  input  logic            ifu_trn,  // transfer
-  input  logic [XLEN-1:0] ifu_adr,  // address
-  // LSU interface (load/store unit)
-  input  logic            lsu_trn,  // transfer
-  input  logic            lsu_wen,  // write enable
-  input  logic [XLEN-1:0] lsu_adr,  // address
-  input  logic    [2-1:0] lsu_siz   // size
-);
+package gdb_server_stub_pkg;
 
   import socket_dpi_pkg::*;
 
-///////////////////////////////////////////////////////////////////////////////
-// local signals
-///////////////////////////////////////////////////////////////////////////////
-
   // byte dynamic array type for casting to/from string
   typedef byte array_t [];
-
-  // named pipe file descriptor
-  int fd;
 
   // state
   typedef enum byte {
@@ -82,27 +39,86 @@ module gdb_server_stub #(
     STEP     = 8'h82
   } state_t;
 
-  state_t state;
+  // point type
+  typedef enum int unsigned {
+    swbreak = 0,  // software breakpoint
+    hwbreak = 1,  // hardware breakpoint
+    watch   = 2,  // write  watchpoint
+    rwatch  = 3,  // read   watchpoint
+    awatch  = 4   // access watchpoint
+  } ptype_t;
+
+  typedef int unsigned pkind_t;
+
+  typedef struct packed {
+    ptype_t ptype;
+    pkind_t pkind;
+  } point_t;
+
+
+  virtual class gdb_server_stub_socket #(
+    // 8/16/32/64 bit CPU selection
+    parameter  int unsigned XLEN = 32,
+    parameter  type         SIZE_T = int unsigned,  // could be longint (RV64), but it results in warnings
+    // number of all registers
+    parameter  int unsigned RNUM = 32+1,
+    // DEBUG parameters
+    parameter  bit DEBUG_LOG = 1'b1
+  );
 
 ///////////////////////////////////////////////////////////////////////////////
-// memory access
+// constructor
 ///////////////////////////////////////////////////////////////////////////////
 
-  // TODO: for a multi memory and cache setup, there should be a decoder here
+    // socket file descriptor
+    int fd;
 
-  function automatic byte mem_read (
-    SIZE_T adr
-  );
-    mem_read = mem[adr/(MLEN/8)][8*(adr%(MLEN/8))+:8];
-  endfunction: mem_read
+    // current state
+    state_t state;
 
-  function automatic void mem_write (
-    SIZE_T adr,
-    byte   dat
-  );
-    mem[adr/(MLEN/8)][8*(adr%(MLEN/8))+:8] = dat;
-    $display("DBG: mem[%08x/(MLEN/8] = %08x", adr, mem[adr/(MLEN/8)]);
-  endfunction: mem_write
+    //constructor
+    function new (
+//      tcb_vif_t tcb,
+      string socket = ""
+    );
+//      this.tcb = tcb;
+      // open character device for R/W
+      fd = server_start(socket);
+      $display("DEBUG: fd = '%08h'.", fd);
+
+      // check if device was found
+      if (fd == 0) begin
+        $fatal(0, "Could not open '%s' device node.", socket);
+      end else begin
+        $info("Connected to '%0s'.", socket);
+      end
+    endfunction: new
+
+///////////////////////////////////////////////////////////////////////////////
+// register/memory access function prototypes
+///////////////////////////////////////////////////////////////////////////////
+
+    pure virtual function bit [XLEN-1:0] reg_read (
+      input  int unsigned   idx
+    );
+
+    pure virtual function void reg_write (
+      input  int unsigned   idx,
+      input  bit [XLEN-1:0] dat
+    );
+
+    pure virtual function byte mem_read (
+      input  SIZE_T adr
+    );
+
+    pure virtual function void mem_write (
+      input  SIZE_T adr,
+      input  byte   dat
+    );
+
+    pure virtual function void jump (
+      input  SIZE_T adr
+    );
 
 ///////////////////////////////////////////////////////////////////////////////
 // GDB character get/put
@@ -443,28 +459,20 @@ module gdb_server_stub #(
     // read packet
     status = gdb_get_packet(pkt);
 
-    // GPR
     pkt = "";
-    for (int unsigned i=0; i<GLEN; i++) begin
+    for (int unsigned i=0; i<RNUM; i++) begin
       // swap byte order since they are sent LSB first
-      val = {<<8{gpr[i]}};
+      val = {<<8{reg_read(i)}};
       case (XLEN)
         32: pkt = {pkt, $sformatf("%08h", val)};
         64: pkt = {pkt, $sformatf("%016h", val)};
       endcase
     end
-    // PC
-    // swap byte order since they are sent LSB first
-    val = {<<8{pc}};
-    case (XLEN)
-      32: pkt = {pkt, $sformatf("%08h", val)};
-      64: pkt = {pkt, $sformatf("%016h", val)};
-    endcase
 
     // send response
     status = gdb_send_packet(pkt);
 
-    return(GLEN+1);
+    return(0);
   endfunction: gdb_reg_readall
 
   function automatic int gdb_reg_writeall ();
@@ -479,8 +487,8 @@ module gdb_server_stub #(
     pkt = pkt.substr(1, pkt.len()-1);
 
     // GPR
-    for (int unsigned i=0; i<GLEN; i++) begin
-`ifdef VERILATOR
+    for (int unsigned i=0; i<RNUM; i++) begin
+      `ifdef VERILATOR
       status = $sscanf(pkt.substr(i*len, i*len+len-1), "%h", val);
 `else
       case (XLEN)
@@ -489,24 +497,13 @@ module gdb_server_stub #(
       endcase
 `endif
       // swap byte order since they are sent LSB first
-      gpr[i] = {<<8{val}};
+      reg_write(i, {<<8{val}});
     end
-    // PC
-`ifdef VERILATOR
-    status = $sscanf(pkt.substr(32*len, 32*len+len-1), "%h", val);
-`else
-    case (XLEN)
-      32: status = $sscanf(pkt.substr(32*len, 32*len+len-1), "%8h", val);
-      64: status = $sscanf(pkt.substr(32*len, 32*len+len-1), "%16h", val);
-    endcase
-`endif
-    // swap byte order since they are sent LSB first
-    pc = {<<8{val}};
 
     // send response
     status = gdb_send_packet("OK");
 
-    return(GLEN+1);
+    return(0);
   endfunction: gdb_reg_writeall
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -525,23 +522,12 @@ module gdb_server_stub #(
     // register index
     status = $sscanf(pkt, "p%h", idx);
 
-    if (idx<GLEN) begin
-      // GPR
-      // swap byte order since they are sent LSB first
-      val = {<<8{gpr[idx]}};
-      case (XLEN)
-        32: pkt = {pkt, $sformatf("%08h", val)};
-        64: pkt = {pkt, $sformatf("%016h", val)};
-      endcase
-    end else begin
-      // PC
-      // swap byte order since they are sent LSB first
-      val = {<<8{pc}};
-      case (XLEN)
-        32: pkt = {pkt, $sformatf("%08h", val)};
-        64: pkt = {pkt, $sformatf("%016h", val)};
-      endcase
-    end
+    // swap byte order since they are sent LSB first
+    val = {<<8{reg_read(idx)}};
+    case (XLEN)
+      32: pkt = {pkt, $sformatf("%08h", val)};
+      64: pkt = {pkt, $sformatf("%016h", val)};
+    endcase
 
     // send response
     status = gdb_send_packet(pkt);
@@ -568,24 +554,12 @@ module gdb_server_stub #(
     endcase
 `endif
 
-    // write registers
-    if (idx<GLEN) begin
-      // GPR
-      // swap byte order since they are sent LSB first
-      gpr[idx] = {<<8{val}};
-      case (XLEN)
-        32: $display("DEBUG: GPR[%0d] <= 32'h%08h", idx, val);
-        64: $display("DEBUG: GPR[%0d] <= 64'h%016h", idx, val);
-      endcase
-    end else begin
-      // PC
-      // swap byte order since they are sent LSB first
-      pc = {<<8{val}};
-      case (XLEN)
-        32: $display("DEBUG: PC <= 32'h%08h", val);
-        64: $display("DEBUG: PC <= 64'h%016h", val);
-      endcase
-    end
+    // swap byte order since they are sent LSB first
+    reg_write(idx, {<<8{val}});
+    case (XLEN)
+      32: $display("DEBUG: GPR[%0d] <= 32'h%08h", idx, val);
+      64: $display("DEBUG: GPR[%0d] <= 64'h%016h", idx, val);
+    endcase
 
     // send response
     status = gdb_send_packet("OK");
@@ -596,22 +570,6 @@ module gdb_server_stub #(
 ///////////////////////////////////////////////////////////////////////////////
 // GDB breakpoints/watchpoints
 ///////////////////////////////////////////////////////////////////////////////
-
-  // point type
-  typedef enum int unsigned {
-    swbreak = 0,  // software breakpoint
-    hwbreak = 1,  // hardware breakpoint
-    watch   = 2,  // write  watchpoint
-    rwatch  = 3,  // read   watchpoint
-    awatch  = 4   // access watchpoint
-  } ptype_t;
-
-  typedef int unsigned pkind_t;
-
-  typedef struct packed {
-    ptype_t ptype;
-    pkind_t pkind;
-  } point_t;
 
   // associative array for hardware breakpoints/watchpoint
   point_t points [logic [XLEN-1:0]];
@@ -708,14 +666,14 @@ module gdb_server_stub #(
         status = $sscanf(pkt, "s%h", addr);
         state = STEP;
         if (status == 1) begin
-          pc = addr;
+          jump(addr);
         end
       end
       "S": begin
         status = $sscanf(pkt, "S%h;%h", sig, addr);
         state = state_t'(sig);
         if (status == 2) begin
-          pc = addr;
+          jump(addr);
         end
       end
     endcase
@@ -740,14 +698,14 @@ module gdb_server_stub #(
         status = $sscanf(pkt, "c%h", addr);
         state = CONTINUE;
         if (status == 1) begin
-          pc = addr;
+          jump(addr);
         end
       end
       "C": begin
         status = $sscanf(pkt, "C%h;%h", sig, addr);
         state = state_t'(sig);
         if (status == 2) begin
-          pc = addr;
+          jump(addr);
         end
       end
     endcase
@@ -828,127 +786,7 @@ module gdb_server_stub #(
     return status;
   endfunction: gdb_packet
 
-///////////////////////////////////////////////////////////////////////////////
-// main loop
-///////////////////////////////////////////////////////////////////////////////
 
-  initial
-  begin
-    static byte ch [] = new[1];
-    int status;
-    int code;
+  endclass:gdb_server_stub_socket
 
-    // set RESET
-    rst = 1'b1;
-    state = RESET;
-
-    // open character device for R/W
-    fd = server_start(SOCKET);
-    $display("DEBUG: fd = '%08h'.", fd);
-
-    // check if device was found
-    // TODO: check for actual return values
-    if (fd == 0) begin
-      $fatal(0, "Could not open '%s' device node.", SOCKET);
-    end else begin
-      $info("Connected to '%0s'.", SOCKET);
-    end
-
-    // main loop/FSM
-    forever
-    begin: loop
-      case (state)
-
-        RESET: begin
-          // go through a reset sequence
-          rst = 1'b1;
-          repeat (4) @(posedge clk);
-          rst <= 1'b0;
-          // enter trap state
-          state = SIGTRAP;
-        end
-
-        CONTINUE: begin
-          // non-blocking socket read
-          status = server_recv(fd, ch, MSG_PEEK | MSG_DONTWAIT);
-          // if empty, check for breakpoints/watchpoints and continue
-          if (status != 1) begin
-            // on clock edge sample system buses
-            @(posedge clk);
-
-            // check for illegal instructions
-            // TODO
-
-            // check for hardware breakpoints
-            if (ifu_trn) begin
-              if (points.exists(ifu_adr)) begin
-                // software breakpoint (TODO)
-                // TODO: check for EBREAK/C.EBREAK instruction codes in memory at address
-                // hardware breakpoint
-                if (points[ifu_adr].ptype == hwbreak) begin
-                  state = SIGTRAP;
-                  $display("DEBUG: Triggered HW breakpoint at address %h.", ifu_adr);
-                  // send response
-                  status = gdb_stop_reply(state);
-                end
-              end
-            end
-
-            // check for hardware watchpoints
-            if (lsu_trn) begin
-              if (points.exists(lsu_adr)) begin
-                if (points[lsu_adr].ptype inside {watch, rwatch, awatch}) begin
-                  state = SIGTRAP;
-                  $display("DEBUG: Triggered HW watchpoint at address %h.", lsu_adr);
-                  // send response
-                  status = gdb_stop_reply(state);
-                end
-              end
-            end
-
-          // in case of Ctrl+C (character 0x03)
-          end else if (ch[0] == SIGQUIT) begin
-            state = SIGINT;
-            $display("DEBUG: Interrupt SIGQUIT (0x03) (Ctrl+c).");
-            // send response
-            status = gdb_stop_reply(state);
-
-          // parse packet and loop back
-          end else begin
-            status = gdb_packet(ch);
-          end
-        end
-
-        STEP: begin
-          // step to the next instruction and trap again
-          do begin
-            @(posedge clk);
-          end while (~ifu_trn);
-          state = SIGTRAP;
-
-          // check for illegal instructions
-          // TODO
-
-          // send response
-          status = gdb_stop_reply(state);
-        end
-
-        // SIGTRAP, SIGINT, ...
-        default: begin
-          // blocking socket read
-          status = server_recv(fd, ch, MSG_PEEK);
-          // parse packet and loop back
-          status = gdb_packet(ch);
-        end
-      endcase
-    end: loop
-  end
-
-  final
-  begin
-    // stop server (close socket)
-    server_stop(fd);
-    $display("DEBUG: stopped server and closed socket.");
-  end
-
-endmodule: gdb_server_stub
+endpackage: gdb_server_stub_pkg

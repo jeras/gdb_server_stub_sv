@@ -15,7 +15,7 @@ module gdb_server_stub_tb #(
   // XML target description
   parameter  string       XML_TARGET = "",     // TODO
   // registers
-  parameter  int unsigned GLEN = 32,           // GPR number can be 16 for RISC-V E extension (embedded)
+  parameter  int unsigned GNUM = 32,           // GPR number can be 16 for RISC-V E extension (embedded)
   parameter  string       XML_REGISTERS = "",  // TODO
   // memory
   parameter  string       XML_MEMORY = "",     // TODO
@@ -78,7 +78,7 @@ module gdb_server_stub_tb #(
 ///////////////////////////////////////////////////////////////////////////////
 
   // GPR
-  logic [XLEN-1:0] gpr [0:GLEN-1];
+  logic [XLEN-1:0] gpr [0:GNUM-1];
   // PC
   logic [XLEN-1:0] pc;
 
@@ -104,7 +104,7 @@ module gdb_server_stub_tb #(
 // debugger stub
 ///////////////////////////////////////////////////////////////////////////////
 
-  gdb_server_stub #(
+  gdb_adapter #(
     // 8/16/32/64 bit CPU selection
     .XLEN          (XLEN  ),
     .SIZE_T        (SIZE_T),
@@ -113,7 +113,7 @@ module gdb_server_stub_tb #(
     // XML target description
     .XML_TARGET    (XML_TARGET),
     // registers
-    .GLEN          (GLEN),
+    .GNUM          (GNUM),
     .XML_REGISTERS (XML_REGISTERS),
     // memory
     .XML_MEMORY    (XML_MEMORY),

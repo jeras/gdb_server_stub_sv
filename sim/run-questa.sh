@@ -3,7 +3,7 @@
 DIR="../hdl"
 
 SRC="$DIR/socket_dpi_pkg.c"
-HDL="$DIR/socket_dpi_pkg.sv $DIR/gdb_server_stub.sv $DIR/gdb_server_stub_tb.sv"
+HDL="$DIR/socket_dpi_pkg.sv $DIR/gdb_server_stub_pkg.sv $DIR/gdb_adapter.sv $DIR/gdb_server_stub_tb.sv"
 
 TOP=gdb_server_stub_tb
 
