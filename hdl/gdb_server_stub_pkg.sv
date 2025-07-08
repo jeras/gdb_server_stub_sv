@@ -58,7 +58,8 @@ package gdb_server_stub_pkg;
 
   virtual class gdb_server_stub_socket #(
     // 8/16/32/64 bit CPU selection
-    parameter  int unsigned XLEN = 32,
+    parameter  int unsigned XLEN = 32,  // register/address/data width
+    parameter  int unsigned ILEN = 32,  // maximum instruction width
     parameter  type         SIZE_T = int unsigned,  // could be longint (RV64), but it results in warnings
     // number of all registers
     parameter  int unsigned RNUM = 32+1,
@@ -76,12 +77,10 @@ package gdb_server_stub_pkg;
     // current state
     state_t state;
 
-    //constructor
+    // constructor
     function new (
-//      tcb_vif_t tcb,
       string socket = ""
     );
-//      this.tcb = tcb;
       // open character device for R/W
       fd = server_start(socket);
       $display("DEBUG: fd = '%08h'.", fd);
@@ -93,6 +92,11 @@ package gdb_server_stub_pkg;
         $info("Connected to '%0s'.", socket);
       end
     endfunction: new
+
+    // close socket explicitly
+    function void close_socket;
+      void'(server_stop(fd));
+    endfunction: close_socket
 
 ///////////////////////////////////////////////////////////////////////////////
 // register/memory access function prototypes
@@ -114,6 +118,14 @@ package gdb_server_stub_pkg;
     pure virtual function void mem_write (
       input  SIZE_T adr,
       input  byte   dat
+    );
+
+    pure virtual function bit exe_illegal (
+      input  SIZE_T adr
+    );
+
+    pure virtual function bit exe_ebreak (
+      input  SIZE_T adr
     );
 
     pure virtual function void jump (
@@ -539,7 +551,7 @@ package gdb_server_stub_pkg;
     int status;
     string pkt;
     int unsigned idx;
-    logic [XLEN-1:0] val;
+    bit [XLEN-1:0] val;
 
     // read packet
     status = gdb_get_packet(pkt);
@@ -556,10 +568,10 @@ package gdb_server_stub_pkg;
 
     // swap byte order since they are sent LSB first
     reg_write(idx, {<<8{val}});
-    case (XLEN)
-      32: $display("DEBUG: GPR[%0d] <= 32'h%08h", idx, val);
-      64: $display("DEBUG: GPR[%0d] <= 64'h%016h", idx, val);
-    endcase
+//    case (XLEN)
+//      32: $display("DEBUG: GPR[%0d] <= 32'h%08h", idx, val);
+//      64: $display("DEBUG: GPR[%0d] <= 64'h%016h", idx, val);
+//    endcase
 
     // send response
     status = gdb_send_packet("OK");
@@ -572,13 +584,13 @@ package gdb_server_stub_pkg;
 ///////////////////////////////////////////////////////////////////////////////
 
   // associative array for hardware breakpoints/watchpoint
-  point_t points [logic [XLEN-1:0]];
+  point_t points [SIZE_T];
 
   function automatic int gdb_point_remove ();
     int status;
     string pkt;
     ptype_t ptype;
-    logic [XLEN-1:0] addr;
+    SIZE_T addr;
     pkind_t pkind;
 
     // read packet
@@ -613,7 +625,7 @@ package gdb_server_stub_pkg;
     int status;
     string pkt;
     ptype_t ptype;
-    logic [XLEN-1:0] addr;
+    SIZE_T addr;
     pkind_t pkind;
 
     // read packet
@@ -644,6 +656,62 @@ package gdb_server_stub_pkg;
     return(1);
   endfunction: gdb_point_insert
 
+  // this function is called from the SoC adapter and not from the packet parser
+  function automatic int gdb_breakpoint_match (
+    input bit [XLEN-1:0] addr
+  );
+    int status;
+
+    // match illegal instruction
+    if (exe_illegal(addr)) begin
+      state = SIGILL;
+      $display("DEBUG: Triggered illegal instruction at address %h.", addr);
+      status = gdb_stop_reply(state);
+      return(1'b1);
+    end else
+    // match EBREAK/C.EBREAK instruction (software breakpoint)
+    if (exe_ebreak(addr)) begin
+      state = SIGTRAP;
+      $display("DEBUG: Triggered SW breakpoint at address %h.", addr);
+      status = gdb_stop_reply(state);
+      return(1'b1);
+    end else
+    // match hardware breakpoint
+    if (points.exists(addr)) begin
+      // TODO: there are also explicit SW breakpoints that depend on ILEN
+      if (points[addr].ptype == hwbreak) begin
+        state = SIGTRAP;
+        $display("DEBUG: Triggered HW breakpoint at address %h.", addr);
+        status = gdb_stop_reply(state);
+      end
+      return(1'b1);
+    end
+    return(1'b0);
+  endfunction: gdb_breakpoint_match
+
+  // this function is called from the SoC adapter and not from the packet parser
+  function automatic int gdb_watchpoint_match (
+    input bit [XLEN-1:0] addr,
+    input bit            wena,  // write enable
+    input bit    [2-1:0] size
+  );
+    int status;
+
+    // match hardware breakpoint
+    if (points.exists(addr)) begin
+      if (((points[addr].ptype == watch ) && wena == 1'b1) ||
+          ((points[addr].ptype == rwatch) && wena == 1'b0) ||
+          ((points[addr].ptype == awatch) )) begin
+        // TODO: check is transfer size matches
+        state = SIGTRAP;
+        $display("DEBUG: Triggered HW watchpoint at address %h.", addr);
+        status = gdb_stop_reply(state);
+        return(1'b1);
+      end
+    end
+    return(1'b0);
+  endfunction: gdb_watchpoint_match
+
 ///////////////////////////////////////////////////////////////////////////////
 // GDB step/continue/kill
 ///////////////////////////////////////////////////////////////////////////////
@@ -655,7 +723,6 @@ package gdb_server_stub_pkg;
     string pkt;
     SIZE_T addr;
     int    sig;
-    logic [XLEN-1:0] val;
 
     // read packet
     status = gdb_get_packet(pkt);
@@ -687,7 +754,6 @@ package gdb_server_stub_pkg;
     string pkt;
     SIZE_T addr;
     int    sig;
-    logic [XLEN-1:0] val;
 
     // read packet
     status = gdb_get_packet(pkt);
@@ -719,9 +785,6 @@ package gdb_server_stub_pkg;
   function automatic int gdb_kill ();
     int status;
     string pkt;
-    SIZE_T addr;
-    int    sig;
-    logic [XLEN-1:0] val;
 
     // read packet
     status = gdb_get_packet(pkt);
@@ -742,7 +805,6 @@ package gdb_server_stub_pkg;
   );
     static byte bf [] = new[2];
     int status;
-    int code;
 
     if (ch[0] == "+") begin
       $display("DEBUG: unexpected \"+\".");
