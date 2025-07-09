@@ -86,10 +86,10 @@ length, *, return code
 ask about str = {str, ...}
 
 
-
+```
 (gdb) show remote memory-read-packet-size
 (gdb) show remote memory-write-packet-size
-
+```
 
 Flushing STDOUT in Questa does not help.
 $fflush(32'h8000_0001);
