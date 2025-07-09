@@ -656,46 +656,49 @@ package gdb_server_stub_pkg;
     return(1);
   endfunction: gdb_point_insert
 
+///////////////////////////////////////////////////////////////////////////////
+// GDB breakpoints/watchpoints matching (return value is the new state)
+///////////////////////////////////////////////////////////////////////////////
+
   // this function is called from the SoC adapter and not from the packet parser
-  function automatic int gdb_breakpoint_match (
+  function automatic state_t gdb_breakpoint_match (
     input bit [XLEN-1:0] addr
   );
     int status;
+    state_t tmp = state;
 
     // match illegal instruction
     if (exe_illegal(addr)) begin
-      state = SIGILL;
+      tmp = SIGILL;
       $display("DEBUG: Triggered illegal instruction at address %h.", addr);
-      status = gdb_stop_reply(state);
-      return(1'b1);
+      status = gdb_stop_reply(tmp);
     end else
     // match EBREAK/C.EBREAK instruction (software breakpoint)
     if (exe_ebreak(addr)) begin
-      state = SIGTRAP;
+      tmp = SIGTRAP;
       $display("DEBUG: Triggered SW breakpoint at address %h.", addr);
-      status = gdb_stop_reply(state);
-      return(1'b1);
+      status = gdb_stop_reply(tmp);
     end else
     // match hardware breakpoint
     if (points.exists(addr)) begin
       // TODO: there are also explicit SW breakpoints that depend on ILEN
       if (points[addr].ptype == hwbreak) begin
-        state = SIGTRAP;
+        tmp = SIGTRAP;
         $display("DEBUG: Triggered HW breakpoint at address %h.", addr);
-        status = gdb_stop_reply(state);
+        status = gdb_stop_reply(tmp);
       end
-      return(1'b1);
     end
-    return(1'b0);
+    return(tmp);
   endfunction: gdb_breakpoint_match
 
   // this function is called from the SoC adapter and not from the packet parser
-  function automatic int gdb_watchpoint_match (
+  function automatic state_t gdb_watchpoint_match (
     input bit [XLEN-1:0] addr,
     input bit            wena,  // write enable
     input bit    [2-1:0] size
   );
     int status;
+    state_t tmp = state;
 
     // match hardware breakpoint
     if (points.exists(addr)) begin
@@ -703,13 +706,12 @@ package gdb_server_stub_pkg;
           ((points[addr].ptype == rwatch) && wena == 1'b0) ||
           ((points[addr].ptype == awatch) )) begin
         // TODO: check is transfer size matches
-        state = SIGTRAP;
+        tmp = SIGTRAP;
         $display("DEBUG: Triggered HW watchpoint at address %h.", addr);
-        status = gdb_stop_reply(state);
-        return(1'b1);
+        status = gdb_stop_reply(tmp);
       end
     end
-    return(1'b0);
+    return(tmp);
   endfunction: gdb_watchpoint_match
 
 ///////////////////////////////////////////////////////////////////////////////
