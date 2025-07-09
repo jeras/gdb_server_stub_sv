@@ -41,8 +41,8 @@ package socket_dpi_pkg;
     input string file
   );
 
-  // stop Unix socket server
-  import "DPI-C" function int server_stop (
+  // close connection from client
+  import "DPI-C" function int server_close (
     input int fd
   );
 

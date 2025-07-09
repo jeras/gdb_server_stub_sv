@@ -93,10 +93,33 @@ package gdb_server_stub_pkg;
       end
     endfunction: new
 
-    // close socket explicitly
-    function void close_socket;
-      void'(server_stop(fd));
-    endfunction: close_socket
+    // accept connection from GDB client (to given socket file descriptor)
+    function void gdb_accept;
+//      cfd = server_accept(sfd);
+      $info("Accepted connection from GDB client.");
+    endfunction: gdb_accept
+
+    // close connection from GDB client
+    function void gdb_close;
+      void'(server_close(fd));
+      $info("Closed connection from GDB client.");
+    endfunction: gdb_close
+
+    function int gdb_send (
+      input  byte data [],
+      input  int  flags = 0  // blocking by default
+    );
+      return(server_send(fd, data, flags));
+    endfunction: gdb_send
+
+    function int gdb_recv (
+      output byte data [],
+      input  int  flags = 0  // blocking by default
+    );
+      int status = server_recv(fd, data, flags);
+      $display("===============I got this far status = %d, data = %p", status, data);
+      return(status);
+    endfunction: gdb_recv
 
 ///////////////////////////////////////////////////////////////////////////////
 // register/memory access function prototypes
@@ -809,12 +832,15 @@ package gdb_server_stub_pkg;
     // read packet
     status = gdb_get_packet(pkt);
 
-    // send response
+    // send response (GDB cliend will close the socket connection)
     status = gdb_send_packet("OK");
 
     // stop HDL simulation, so the HDL simulator can render waveforms
+    $info("GDB: detached, stopping simulation from within state %s.", state.name);
     $stop();
-    // continue HDL simulation before reconnecting the debugger
+    // after user continues HDL simulation blocking wait for GDB client to reconnect
+    $info("GDB: continuing stopped simulation, waiting for GDB to reconnect to.");
+//    gdb_accept;
 
     // do not send packet response here
     return(0);
