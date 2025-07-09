@@ -713,7 +713,7 @@ package gdb_server_stub_pkg;
   endfunction: gdb_watchpoint_match
 
 ///////////////////////////////////////////////////////////////////////////////
-// GDB step/continue/kill
+// GDB step/continue
 ///////////////////////////////////////////////////////////////////////////////
 
   // TODO: jump to address might not be supported
@@ -782,6 +782,10 @@ package gdb_server_stub_pkg;
     return(0);
   endfunction: gdb_continue
 
+///////////////////////////////////////////////////////////////////////////////
+// GDB kill/detach
+///////////////////////////////////////////////////////////////////////////////
+
   function automatic int gdb_kill ();
     int status;
     string pkt;
@@ -795,6 +799,24 @@ package gdb_server_stub_pkg;
     // do not send packet response here
     return(0);
   endfunction: gdb_kill
+
+  function automatic int gdb_detach ();
+    int status;
+    string pkt;
+
+    // read packet
+    status = gdb_get_packet(pkt);
+
+    // send response
+    status = gdb_send_packet("OK");
+
+    // stop HDL simulation, so the HDL simulator can render waveforms
+    $stop();
+    // continue HDL simulation before reconnecting the debugger
+
+    // do not send packet response here
+    return(0);
+  endfunction: gdb_detach
 
 ///////////////////////////////////////////////////////////////////////////////
 // GDB packet
@@ -834,6 +856,7 @@ package gdb_server_stub_pkg;
         "z": status = gdb_point_remove();
         "Z": status = gdb_point_insert();
         "k": status = gdb_kill();
+        "D": status = gdb_detach();
         default: begin
           string pkt;
           // read packet
