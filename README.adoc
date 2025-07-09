@@ -148,7 +148,8 @@ https://medium.com/@tatsuo.nomura/implement-gdb-remote-debug-protocol-stub-from-
 - Zephyr RTOS link:https://github.com/zephyrproject-rtos/zephyr/blob/64ac57abcb90cebdc3e9ed8ea07784134a19a242/subsys/debug/gdbstub/gdbstub.c#L623[gdbstub]
 - OpenOCD link:https://github.com/riscv-collab/riscv-openocd/blob/1aebdf8e3025e8a2ac65a1ebcdccd11448d9b46e/src/server/gdb_server.c#L2917[gdb_server]
 - RISC-V based Virtual Prototype (VP) https://github.com/agra-uni-bremen/riscv-vp/tree/48b2f5877b2368cc466fb0da155db349e676c0b0/vp/src/core/common/gdb-mc[gdb-mc]
-- Qemu
+- link:https://github.com/qemu/qemu/tree/master/gdbstub[Qemu gdbstub]
+- link:https://github.com/mborgerson/gdbstub[gdbstub]
 
 === DPI:
 
@@ -162,7 +163,7 @@ https://www.reddit.com/r/FPGA/comments/nfkuq6/modelsim_fatal_vsim3828_could_not_
 Linux
 link:https://man7.org/linux/man-pages/man2/socket.2.html[`socket`]
 link:https://man7.org/linux/man-pages/man2/send.2.html[`send`] and
-https://man7.org/linux/man-pages/man2/recv.2.html[`recv`].
+link:https://man7.org/linux/man-pages/man2/recv.2.html[`recv`].
 
 Non-blocking:
 https://stackoverflow.com/questions/20588002/nonblocking-get-character
