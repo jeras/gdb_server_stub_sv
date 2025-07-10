@@ -22,12 +22,14 @@
 extern "C" {
 #endif
 
-int test (int val) {
-    return val+1;
-}
+// socket file descriptor
+int sfd;
+
+// client file descriptor
+int cfd;
 
 // create socket and mark it as passive
-int server_listen(const char* name) {
+int socket_listen(const char* name) {
   struct sockaddr_un server;
 
   printf("DPI-C: Creating socket %s\n", name);
@@ -43,7 +45,7 @@ int server_listen(const char* name) {
   }
 
   // create socket file descriptor
-  int sfd = socket(AF_UNIX, SOCK_STREAM, 0);
+  sfd = socket(AF_UNIX, SOCK_STREAM, 0);
   printf("DPI-C: Socket fd = %d\n", sfd);
 
   memset(&server, 0, sizeof(struct sockaddr_un));
@@ -67,9 +69,9 @@ int server_listen(const char* name) {
 }
 
 // accept connection from client (to a given socket fd)
-int server_accept(int sfd) {
+int socket_accept () {
   printf("DPI-C: Waiting for client to connect...\n");
-  int cfd = accept(sfd, NULL, NULL);
+  cfd = accept(sfd, NULL, NULL);
   printf("DPI-C: Accepted client connection fd = %d\n", cfd);
 
   // return client fd
@@ -77,14 +79,14 @@ int server_accept(int sfd) {
 }
 
 // close connection from client
-int server_close (int cfd) {
+int socket_close () {
   return close(cfd);
 }
 
 // transmitter
-int server_send (int fd, const svOpenArrayHandle data, int flags) {
+int socket_send (const svOpenArrayHandle data, int flags) {
   int status;
-  status = send(fd, svGetArrayPtr(data), svSizeOfArray(data), flags);
+  status = send(cfd, svGetArrayPtr(data), svSizeOfArray(data), flags);
   if (status == -1) {
     // https://en.wikipedia.org/wiki/Errno.h
     printf("SEND failed with errno = %0d.\n", errno);
@@ -94,12 +96,12 @@ int server_send (int fd, const svOpenArrayHandle data, int flags) {
 }
 
 // receiver
-int server_recv (int fd, const svOpenArrayHandle data, int flags) {
+int socket_recv (const svOpenArrayHandle data, int flags) {
   int status;
-  status = recv(fd, svGetArrayPtr(data), svSizeOfArray(data), flags);
+  status = recv(cfd, svGetArrayPtr(data), svSizeOfArray(data), flags);
   if (status == -1) {
     // https://en.wikipedia.org/wiki/Errno.h
-//    printf("RECV failed with errno = %0d.\n", errno);
+    printf("RECV failed with errno = %0d.\n", errno);
     return -1;
   }
   return status;

@@ -33,34 +33,25 @@ package socket_dpi_pkg;
     MSG_CMSG_CLOEXEC = 32'h40000000  // Set close_on_exit for file descriptor received through SCM_RIGHTS.
   } flags;
 
-
-  import "DPI-C" function int test (input int val);
-
   // start Unix socket server (returns socket file descriptor)
-  import "DPI-C" function int server_listen (
+  import "DPI-C" function int socket_listen (
     input string file
   );
 
   // accept connection from client (returning a client file descriptor)
-  import "DPI-C" function int server_accept (
-    input int sfd  // socket file descriptor
-  );
+  import "DPI-C" function int socket_accept ();
   
   // close connection from client
-  import "DPI-C" function int server_close (
-    input int cfd
-  );
+  import "DPI-C" function int socket_close ();
 
   // send data (returns the number of bytes sent)
-  import "DPI-C" function int server_send (
-    input  int  fd,
+  import "DPI-C" function int socket_send (
     input  byte data [],
     input  int  flags
   );
 
   // receive data (returns the number of bytes received)
-  import "DPI-C" function int server_recv (
-    input  int  fd,
+  import "DPI-C" function int socket_recv (
     output byte data [],
     input  int  flags
   );

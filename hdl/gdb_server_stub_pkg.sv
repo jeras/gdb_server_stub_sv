@@ -71,12 +71,6 @@ package gdb_server_stub_pkg;
 // constructor
 ///////////////////////////////////////////////////////////////////////////////
 
-    // socket file descriptor
-    int sfd;
-
-    // client file descriptor
-    int cfd;
-
     // acknowledge mode
     bit acknowledge = 1'b1;
 
@@ -87,44 +81,19 @@ package gdb_server_stub_pkg;
     function new (
       string socket = ""
     );
+      int status;
+
       // open character device for R/W
-      sfd = server_listen(socket);
-      $display("DEBUG: sfd = '%08h'.", sfd);
+      status = socket_listen(socket);
 
       // check if device was found
-      if (sfd == 0) begin
+      if (status == 0) begin
         $fatal(0, "Could not open '%s' device node.", socket);
       end else begin
         $info("Connected to '%0s'.", socket);
       end
-      gdb_accept;
+      void'(socket_accept);
     endfunction: new
-
-    // accept connection from GDB client (to given socket file descriptor)
-    function void gdb_accept;
-      cfd = server_accept(sfd);
-      $info("Accepted connection from GDB client.");
-    endfunction: gdb_accept
-
-    // close connection from GDB client
-    function void gdb_close;
-      void'(server_close(cfd));
-      $info("Closed connection from GDB client.");
-    endfunction: gdb_close
-
-    function int gdb_send (
-      input  byte data [],
-      input  int  flags = 0  // blocking by default
-    );
-      return(server_send(cfd, data, flags));
-    endfunction: gdb_send
-
-    function int gdb_recv (
-      ref    byte data [],
-      input  int  flags = 0  // blocking by default
-    );
-      return(server_recv(cfd, data, flags));
-    endfunction: gdb_recv
 
 ///////////////////////////////////////////////////////////////////////////////
 // register/memory access function prototypes
@@ -167,7 +136,7 @@ package gdb_server_stub_pkg;
   function automatic void gdb_write (string str);
     int status;
     byte buffer [] = new[str.len()](array_t'(str));
-    status = gdb_send(buffer, 0);
+    status = socket_send(buffer, 0);
   endfunction: gdb_write
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -190,7 +159,7 @@ package gdb_server_stub_pkg;
     // wait for the start character, ignore the rest
     // TODO: error handling?
     do begin
-      status = gdb_recv(buffer, 0);
+      status = socket_recv(buffer, 0);
 //      $display("DEBUG: gdb_get_packet: buffer = %p", buffer);
       str = {str, string'(buffer)};
       len = str.len();
@@ -259,7 +228,7 @@ package gdb_server_stub_pkg;
 
     // Check acknowledge
     if (ack) begin
-      status = gdb_recv(ch, 0);
+      status = socket_recv(ch, 0);
       if (ch[0] == "+")  return(0);
       else               return(-1);
     end
@@ -853,7 +822,7 @@ package gdb_server_stub_pkg;
     $stop();
     // after user continues HDL simulation blocking wait for GDB client to reconnect
     $info("GDB: continuing stopped simulation, waiting for GDB to reconnect to.");
-    gdb_accept;
+    void'(socket_accept);
 
     // do not send packet response here
     return(0);
@@ -872,10 +841,10 @@ package gdb_server_stub_pkg;
     if (ch[0] == "+") begin
       $display("DEBUG: unexpected \"+\".");
       // remove the acknowledge from the socket
-      status = gdb_recv(ch, 0);
+      status = socket_recv(ch, 0);
     end else
     if (ch[0] == "$") begin
-      status = gdb_recv(bf, MSG_PEEK);
+      status = socket_recv(bf, MSG_PEEK);
       // parse command
       case (bf[1])
 //        "x": status = gdb_mem_bin_read();
