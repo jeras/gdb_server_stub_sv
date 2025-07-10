@@ -81,6 +81,7 @@ int socket_accept () {
 // close connection from client
 int socket_close () {
   return close(cfd);
+  printf("DPI-C: Closed connection from client.");
 }
 
 // transmitter

@@ -68,14 +68,24 @@ package gdb_server_stub_pkg;
   );
 
 ///////////////////////////////////////////////////////////////////////////////
-// constructor
+// GDB state
 ///////////////////////////////////////////////////////////////////////////////
+
+    // debug log mode
+    bit debug_log = DEBUG_LOG;
 
     // acknowledge mode
     bit acknowledge = 1'b1;
 
-    // current state
+    // extended remote mode
+    bit extended = 1'b0;
+
+    // CPU current state
     state_t state;
+
+///////////////////////////////////////////////////////////////////////////////
+// constructor
+///////////////////////////////////////////////////////////////////////////////
 
     // constructor
     function new (
@@ -96,36 +106,38 @@ package gdb_server_stub_pkg;
     endfunction: new
 
 ///////////////////////////////////////////////////////////////////////////////
-// register/memory access function prototypes
+// architecture register/memory access function prototypes
 ///////////////////////////////////////////////////////////////////////////////
 
-    pure virtual function bit [XLEN-1:0] reg_read (
+    pure virtual function bit [XLEN-1:0] arch_reg_read (
       input  int unsigned   idx
     );
 
-    pure virtual function void reg_write (
+    pure virtual function void arch_reg_write (
       input  int unsigned   idx,
       input  bit [XLEN-1:0] dat
     );
 
-    pure virtual function byte mem_read (
+    pure virtual function byte arch_mem_read (
       input  SIZE_T adr
     );
 
-    pure virtual function void mem_write (
+    // TODO: handle memory write errors
+    pure virtual function bit arch_mem_write (
       input  SIZE_T adr,
       input  byte   dat
     );
 
-    pure virtual function bit exe_illegal (
+    pure virtual function bit arch_illegal (
       input  SIZE_T adr
     );
 
-    pure virtual function bit exe_ebreak (
+    pure virtual function bit arch_break (
       input  SIZE_T adr
     );
 
-    pure virtual function void jump (
+    // TODO: handle PC write errors
+    pure virtual function bit arch_jump (
       input  SIZE_T adr
     );
 
@@ -168,7 +180,7 @@ package gdb_server_stub_pkg;
 
     // extract packet data from received string
     pkt = str.substr(1,len-4);
-    if (DEBUG_LOG) begin
+    if (debug_log) begin
   //    $display("DEBUG: <= %s", str);
       $display("DEBUG: <- %s", pkt);
     end
@@ -207,7 +219,7 @@ package gdb_server_stub_pkg;
     byte   checksum = 0;
     string checksum_str;
 
-    if (DEBUG_LOG) begin
+    if (debug_log) begin
       $display("DEBUG: -> %p", pkt);
     end
 
@@ -235,10 +247,43 @@ package gdb_server_stub_pkg;
   endfunction: gdb_send_packet
 
 ///////////////////////////////////////////////////////////////////////////////
+// hex encoding of ASCII data
+///////////////////////////////////////////////////////////////////////////////
+
+  function automatic string gdb_hex2ascii (
+    input string hex
+  );
+    int code;
+    int unsigned len = hex.len()/2;
+    string ascii = {len{"-"}};
+    // loop through HEX character pairs and convert them to ASCII characters
+    for (int unsigned i=0; i<len; i++) begin
+      code = $sscanf(hex.substr(2*i, 2*i+1), "%2h", ascii[i]);
+    end
+    return(ascii);
+  endfunction: gdb_hex2ascii
+
+  function automatic string gdb_ascii2hex (
+    input string ascii
+  );
+    int code;
+    int unsigned len = ascii.len();
+    string hex = {len{"XX"}};
+    string tmp;
+    // loop through HEX character pairs and convert them to ASCII characters
+    for (int unsigned i=0; i<len; i++) begin
+      tmp = $sformatf("%02h", ascii[i]);
+      hex[i*2+0] = tmp[0];
+      hex[i*2+1] = tmp[1];
+    end
+    return(hex);
+  endfunction: gdb_ascii2hex
+
+///////////////////////////////////////////////////////////////////////////////
 // GDB state
 ///////////////////////////////////////////////////////////////////////////////
 
-  // Send a exception packet "T <value>"
+  // in response to '?'
   function automatic int gdb_state();
     string pkt;
     int status;
@@ -251,43 +296,76 @@ package gdb_server_stub_pkg;
     return(status);
   endfunction: gdb_state
 
-  // Send a exception packet "T <value>"
-  function automatic int gdb_stop_reply(
+  // TODO: Send a exception packet "T <value>"
+  function automatic int gdb_stop_reply (
     input byte signal = state
   );
     // reply with signal (current state by default)
     return(gdb_send_packet($sformatf("S%02h", signal)));
   endfunction: gdb_stop_reply
 
+  // send ERROR number reply
+  // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
+  function automatic int gdb_error_number_reply (
+    input byte val = 0
+  );
+    // reply with signal (current state by default)
+    return(gdb_send_packet($sformatf("E%02h", val)));
+  endfunction: gdb_error_number_reply
+
+  // send ERROR text reply
+  // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
+  function automatic int gdb_error_text_reply (
+    input string str = ""
+  );
+    // reply with signal (current state by default)
+    return(gdb_send_packet($sformatf("E.%s", gdb_ascii2hex(str))));
+  endfunction: gdb_error_text_reply
+
+  // send message to GDB console output
+  function automatic int gdb_console_output (
+    input string str
+  );
+    // reply with signal (current state by default)
+    return(gdb_send_packet($sformatf("O%s", gdb_ascii2hex(str))));
+  endfunction: gdb_console_output
+
 ///////////////////////////////////////////////////////////////////////////////
-// GDB query
+// GDB query (monitor, )
 ///////////////////////////////////////////////////////////////////////////////
 
-  function automatic bit gdb_qsupported (
-    input string pkt
+  // GDB monitor commands
+  // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Server.html
+  // https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html#General-Query-Packets
+  function automatic bit gdb_query_monitor (
+    input string str
   );
     int status;
-    if (pkt.substr(0,10) == "qSupported") begin
-      status = gdb_send_packet("");
+    if (str == "help") begin
+      status = gdb_console_output("HELP: There are no monitor commands available.\n");
       return(1'b1);
     end else begin
       return(1'b0);
     end
-  endfunction: gdb_qsupported
+  endfunction: gdb_query_monitor
 
-  function automatic void gdb_query_packet ();
+  function automatic int gdb_query_packet ();
     string pkt;
+    string str;
     int status;
 
     // read packet
     status = gdb_get_packet(pkt);
 
-    if (gdb_qsupported(pkt)) begin
-      return;
+    // parse various query packets
+    if ($sscanf(pkt, "qRcmd,%s", str) > 0) begin
+      status = gdb_query_monitor(gdb_hex2ascii(str));
+      status = gdb_send_packet("OK");
     end else begin
       // not supported, send empty response packet
       status = gdb_send_packet("");
     end
+    return(0);
   endfunction: gdb_query_packet
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -337,7 +415,7 @@ package gdb_server_stub_pkg;
     pkt = {len{"XX"}};
     for (SIZE_T i=0; i<len; i++) begin
       string tmp = "XX";
-      tmp = $sformatf("%02h", mem_read(adr+i));
+      tmp = $sformatf("%02h", arch_mem_read(adr+i));
       pkt[i*2+0] = tmp[0];
       pkt[i*2+1] = tmp[1];
     end
@@ -380,14 +458,15 @@ package gdb_server_stub_pkg;
 
     // write memory
     for (SIZE_T i=0; i<len; i++) begin
-//      $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, mem_read(adr+i));
+//      $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, arch_mem_read(adr+i));
 `ifdef VERILATOR
       status = $sscanf(str.substr(i*2, i*2+1), "%2h", dat);
 `else
       status = $sscanf(str.substr(i*2, i*2+1), "%h", dat);
 `endif
-//      $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, mem_read(adr+i));
-      mem_write(adr+i, dat);
+//      $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, arch_mem_read(adr+i));
+      // TODO handle memory access errors
+      void'(arch_mem_write(adr+i, dat));
     end
 
     // send response
@@ -423,7 +502,7 @@ package gdb_server_stub_pkg;
     // read memory
     pkt = {len{8'h00}};
     for (SIZE_T i=0; i<len; i++) begin
-      pkt[i] = mem_read(adr+i);
+      pkt[i] = arch_mem_read(adr+i);
     end
 
     // send response
@@ -454,7 +533,8 @@ package gdb_server_stub_pkg;
 
     // write memory
     for (SIZE_T i=0; i<len; i++) begin
-      mem_write(adr+i, pkt[code+i]);
+      // TODO handle memory access errors
+      void'(arch_mem_write(adr+i, pkt[code+i]));
     end
 
     // send response
@@ -479,7 +559,7 @@ package gdb_server_stub_pkg;
     pkt = "";
     for (int unsigned i=0; i<RNUM; i++) begin
       // swap byte order since they are sent LSB first
-      val = {<<8{reg_read(i)}};
+      val = {<<8{arch_reg_read(i)}};
       case (XLEN)
         32: pkt = {pkt, $sformatf("%08h", val)};
         64: pkt = {pkt, $sformatf("%016h", val)};
@@ -514,7 +594,7 @@ package gdb_server_stub_pkg;
       endcase
 `endif
       // swap byte order since they are sent LSB first
-      reg_write(i, {<<8{val}});
+      arch_reg_write(i, {<<8{val}});
     end
 
     // send response
@@ -540,7 +620,7 @@ package gdb_server_stub_pkg;
     status = $sscanf(pkt, "p%h", idx);
 
     // swap byte order since they are sent LSB first
-    val = {<<8{reg_read(idx)}};
+    val = {<<8{arch_reg_read(idx)}};
     case (XLEN)
       32: pkt = {pkt, $sformatf("%08h", val)};
       64: pkt = {pkt, $sformatf("%016h", val)};
@@ -572,7 +652,7 @@ package gdb_server_stub_pkg;
 `endif
 
     // swap byte order since they are sent LSB first
-    reg_write(idx, {<<8{val}});
+    arch_reg_write(idx, {<<8{val}});
 //    case (XLEN)
 //      32: $display("DEBUG: GPR[%0d] <= 32'h%08h", idx, val);
 //      64: $display("DEBUG: GPR[%0d] <= 64'h%016h", idx, val);
@@ -673,13 +753,13 @@ package gdb_server_stub_pkg;
     state_t tmp = state;
 
     // match illegal instruction
-    if (exe_illegal(addr)) begin
+    if (arch_illegal(addr)) begin
       tmp = SIGILL;
       $display("DEBUG: Triggered illegal instruction at address %h.", addr);
       status = gdb_stop_reply(tmp);
     end else
     // match EBREAK/C.EBREAK instruction (software breakpoint)
-    if (exe_ebreak(addr)) begin
+    if (arch_break(addr)) begin
       tmp = SIGTRAP;
       $display("DEBUG: Triggered SW breakpoint at address %h.", addr);
       status = gdb_stop_reply(tmp);
@@ -723,8 +803,6 @@ package gdb_server_stub_pkg;
 // GDB step/continue
 ///////////////////////////////////////////////////////////////////////////////
 
-  // TODO: jump to address might not be supported
-
   function automatic int gdb_step;
     int status;
     string pkt;
@@ -740,14 +818,16 @@ package gdb_server_stub_pkg;
         status = $sscanf(pkt, "s%h", addr);
         state = STEP;
         if (status == 1) begin
-          jump(addr);
+          // TODO handle PC write errors
+          void'(arch_jump(addr));
         end
       end
       "S": begin
         status = $sscanf(pkt, "S%h;%h", sig, addr);
         state = state_t'(sig);
         if (status == 2) begin
-          jump(addr);
+          // TODO handle PC write errors
+          void'(arch_jump(addr));
         end
       end
     endcase
@@ -771,14 +851,16 @@ package gdb_server_stub_pkg;
         status = $sscanf(pkt, "c%h", addr);
         state = CONTINUE;
         if (status == 1) begin
-          jump(addr);
+          // TODO handle PC write errors
+          void'(arch_jump(addr));
         end
       end
       "C": begin
         status = $sscanf(pkt, "C%h;%h", sig, addr);
         state = state_t'(sig);
         if (status == 2) begin
-          jump(addr);
+          // TODO handle PC write errors
+          void'(arch_jump(addr));
         end
       end
     endcase
@@ -790,8 +872,61 @@ package gdb_server_stub_pkg;
   endfunction: gdb_continue
 
 ///////////////////////////////////////////////////////////////////////////////
-// GDB kill/detach
+// GDB extended/reset/detach/kill
 ///////////////////////////////////////////////////////////////////////////////
+
+  function automatic int gdb_extended ();
+    int status;
+    string pkt;
+
+    // read packet
+    status = gdb_get_packet(pkt);
+
+    // set extended mode
+    extended = 1'b1;
+
+    // send response
+    status = gdb_send_packet("OK");
+
+    return(0);
+  endfunction: gdb_extended
+
+  function automatic int gdb_reset ();
+    int status;
+    string pkt;
+
+    // read packet
+    status = gdb_get_packet(pkt);
+
+    // enter RESET state
+    state = RESET;
+
+    // do not send packet response here
+    return(0);
+  endfunction: gdb_reset
+
+  function automatic int gdb_detach ();
+    int status;
+    string pkt;
+
+    // read packet
+    status = gdb_get_packet(pkt);
+
+    // send response (GDB cliend will close the socket connection)
+    status = gdb_send_packet("OK");
+
+    // clear extended mode
+    extended = 1'b0;
+
+    // stop HDL simulation, so the HDL simulator can render waveforms
+    $info("GDB: detached, stopping simulation from within state %s.", state.name);
+    $stop();
+    // after user continues HDL simulation blocking wait for GDB client to reconnect
+    $info("GDB: continuing stopped simulation, waiting for GDB to reconnect to.");
+    void'(socket_accept);
+
+    return(0);
+  endfunction: gdb_detach
 
   function automatic int gdb_kill ();
     int status;
@@ -806,27 +941,6 @@ package gdb_server_stub_pkg;
     // do not send packet response here
     return(0);
   endfunction: gdb_kill
-
-  function automatic int gdb_detach ();
-    int status;
-    string pkt;
-
-    // read packet
-    status = gdb_get_packet(pkt);
-
-    // send response (GDB cliend will close the socket connection)
-    status = gdb_send_packet("OK");
-
-    // stop HDL simulation, so the HDL simulator can render waveforms
-    $info("GDB: detached, stopping simulation from within state %s.", state.name);
-    $stop();
-    // after user continues HDL simulation blocking wait for GDB client to reconnect
-    $info("GDB: continuing stopped simulation, waiting for GDB to reconnect to.");
-    void'(socket_accept);
-
-    // do not send packet response here
-    return(0);
-  endfunction: gdb_detach
 
 ///////////////////////////////////////////////////////////////////////////////
 // GDB packet
@@ -861,12 +975,14 @@ package gdb_server_stub_pkg;
         "C": status = gdb_continue();
         "?": status = gdb_state();
         "Q",
-        "q":          gdb_query_packet();
+        "q": status = gdb_query_packet();
         "v":          gdb_verbose_packet();
         "z": status = gdb_point_remove();
         "Z": status = gdb_point_insert();
-        "k": status = gdb_kill();
+        "!": status = gdb_extended();
+        "R": status = gdb_reset();
         "D": status = gdb_detach();
+        "k": status = gdb_kill();
         default: begin
           string pkt;
           // read packet
