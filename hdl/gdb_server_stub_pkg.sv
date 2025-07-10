@@ -72,7 +72,13 @@ package gdb_server_stub_pkg;
 ///////////////////////////////////////////////////////////////////////////////
 
     // socket file descriptor
+    int sfd;
+
+    // client file descriptor
     int fd;
+
+    // acknowledge mode
+    bit acknowledge = 1'b1;
 
     // current state
     state_t state;
@@ -82,20 +88,21 @@ package gdb_server_stub_pkg;
       string socket = ""
     );
       // open character device for R/W
-      fd = server_start(socket);
-      $display("DEBUG: fd = '%08h'.", fd);
+      sfd = server_listen(socket);
+      $display("DEBUG: sfd = '%08h'.", sfd);
 
       // check if device was found
-      if (fd == 0) begin
+      if (sfd == 0) begin
         $fatal(0, "Could not open '%s' device node.", socket);
       end else begin
         $info("Connected to '%0s'.", socket);
       end
+      gdb_accept;
     endfunction: new
 
     // accept connection from GDB client (to given socket file descriptor)
     function void gdb_accept;
-//      cfd = server_accept(sfd);
+      fd = server_accept(sfd);
       $info("Accepted connection from GDB client.");
     endfunction: gdb_accept
 
@@ -170,7 +177,8 @@ package gdb_server_stub_pkg;
 ///////////////////////////////////////////////////////////////////////////////
 
   function automatic int gdb_get_packet(
-    output string pkt
+    output string pkt,
+    input bit    ack = acknowledge
   );
     int status;
     int unsigned len;
@@ -209,18 +217,23 @@ package gdb_server_stub_pkg;
     checksum_str = $sformatf("%02h", checksum);
     if (checksum_ref != checksum_str) begin
       $error("Bad checksum. Got 0x%s but was expecting: 0x%s for packet '%s'", checksum_ref, checksum_str, pkt);
-      // NACK packet
-      gdb_write("-");
+      if (ack) begin
+        // NACK packet
+        gdb_write("-");
+      end
       return (-1);
     end else begin
-      // ACK packet
-      gdb_write("+");
+      if (ack) begin
+        // ACK packet
+        gdb_write("+");
+      end
       return(0);
     end
   endfunction: gdb_get_packet
 
   function automatic int gdb_send_packet(
-    input string pkt
+    input string pkt,
+    input bit    ack = acknowledge
   );
     int status;
     byte   ch [] = new[1];
@@ -246,10 +259,12 @@ package gdb_server_stub_pkg;
     // Send the checksum
     gdb_write($sformatf("%02h", checksum));
 
-    // Check response
-    status = server_recv(fd, ch, 0);
-    if (ch[0] == "+")  return(0);
-    else               return(-1);
+    // Check acknowledge
+    if (ack) begin
+      status = server_recv(fd, ch, 0);
+      if (ch[0] == "+")  return(0);
+      else               return(-1);
+    end
   endfunction: gdb_send_packet
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -840,7 +855,7 @@ package gdb_server_stub_pkg;
     $stop();
     // after user continues HDL simulation blocking wait for GDB client to reconnect
     $info("GDB: continuing stopped simulation, waiting for GDB to reconnect to.");
-//    gdb_accept;
+    gdb_accept;
 
     // do not send packet response here
     return(0);
@@ -855,6 +870,7 @@ package gdb_server_stub_pkg;
   );
     static byte bf [] = new[2];
     int status;
+    $display("===============I got this far ch = %p", ch);
 
     if (ch[0] == "+") begin
       $display("DEBUG: unexpected \"+\".");

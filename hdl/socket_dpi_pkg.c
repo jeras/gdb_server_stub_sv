@@ -27,7 +27,7 @@ int test (int val) {
 }
 
 // create socket and mark it as passive
-int server_start(const char* name) {
+int server_listen(const char* name) {
   struct sockaddr_un server;
 
   printf("DPI-C: Creating socket %s\n", name);
@@ -62,10 +62,17 @@ int server_start(const char* name) {
     return -1;
   }
 
+  // return socket fd
+  return sfd;
+}
+
+// accept connection from client (to a given socket fd)
+int server_accept(int sfd) {
   printf("DPI-C: Waiting for client to connect...\n");
   int cfd = accept(sfd, NULL, NULL);
   printf("DPI-C: Accepted client connection fd = %d\n", cfd);
 
+  // return client fd
   return cfd;
 }
 

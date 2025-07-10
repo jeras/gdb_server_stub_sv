@@ -6,14 +6,12 @@ sudo apt install socat
 
 This is a GDB stub written in SystemVerilog.
 
-```bash
-# create a FIFO (named pipe) file
-rm gdb_stub
-mkfifo gdb_stub
-
-socat pty,rawer,echo=0,link=port_gdb pty,rawer,echo=0,link=port_stub
-
 ```
+sudo mv gdb_server_stub_socket gdb_server_stub_socket.original
+sudo socat -t100 -x -v UNIX-LISTEN:gdb_server_stub_socket,mode=777,reuseaddr,fork UNIX-CONNECT:gdb_server_stub_socket.original
+```
+
+
 
 ```
 /opt/riscv-gcc/bin/riscv32-unknown-elf-gdb

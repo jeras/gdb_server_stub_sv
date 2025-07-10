@@ -36,14 +36,19 @@ package socket_dpi_pkg;
 
   import "DPI-C" function int test (input int val);
 
-  // start Unix socket server
-  import "DPI-C" function int server_start (
+  // start Unix socket server (returns socket file descriptor)
+  import "DPI-C" function int server_listen (
     input string file
   );
 
+  // accept connection from client (returning a client file descriptor)
+  import "DPI-C" function int server_accept (
+    input int sfd  // socket file descriptor
+  );
+  
   // close connection from client
   import "DPI-C" function int server_close (
-    input int fd
+    input int cfd
   );
 
   // send data (returns the number of bytes sent)
