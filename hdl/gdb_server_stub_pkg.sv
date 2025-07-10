@@ -75,7 +75,7 @@ package gdb_server_stub_pkg;
     int sfd;
 
     // client file descriptor
-    int fd;
+    int cfd;
 
     // acknowledge mode
     bit acknowledge = 1'b1;
@@ -102,13 +102,13 @@ package gdb_server_stub_pkg;
 
     // accept connection from GDB client (to given socket file descriptor)
     function void gdb_accept;
-      fd = server_accept(sfd);
+      cfd = server_accept(sfd);
       $info("Accepted connection from GDB client.");
     endfunction: gdb_accept
 
     // close connection from GDB client
     function void gdb_close;
-      void'(server_close(fd));
+      void'(server_close(cfd));
       $info("Closed connection from GDB client.");
     endfunction: gdb_close
 
@@ -116,16 +116,14 @@ package gdb_server_stub_pkg;
       input  byte data [],
       input  int  flags = 0  // blocking by default
     );
-      return(server_send(fd, data, flags));
+      return(server_send(cfd, data, flags));
     endfunction: gdb_send
 
     function int gdb_recv (
-      output byte data [],
+      ref    byte data [],
       input  int  flags = 0  // blocking by default
     );
-      int status = server_recv(fd, data, flags);
-      $display("===============I got this far status = %d, data = %p", status, data);
-      return(status);
+      return(server_recv(cfd, data, flags));
     endfunction: gdb_recv
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -169,7 +167,7 @@ package gdb_server_stub_pkg;
   function automatic void gdb_write (string str);
     int status;
     byte buffer [] = new[str.len()](array_t'(str));
-    status = server_send(fd, buffer, 0);
+    status = gdb_send(buffer, 0);
   endfunction: gdb_write
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -192,7 +190,7 @@ package gdb_server_stub_pkg;
     // wait for the start character, ignore the rest
     // TODO: error handling?
     do begin
-      status = server_recv(fd, buffer, 0);
+      status = gdb_recv(buffer, 0);
 //      $display("DEBUG: gdb_get_packet: buffer = %p", buffer);
       str = {str, string'(buffer)};
       len = str.len();
@@ -261,7 +259,7 @@ package gdb_server_stub_pkg;
 
     // Check acknowledge
     if (ack) begin
-      status = server_recv(fd, ch, 0);
+      status = gdb_recv(ch, 0);
       if (ch[0] == "+")  return(0);
       else               return(-1);
     end
@@ -866,19 +864,18 @@ package gdb_server_stub_pkg;
 ///////////////////////////////////////////////////////////////////////////////
 
   function automatic int gdb_packet (
-    input byte ch [1]
+    input byte ch []
   );
     static byte bf [] = new[2];
     int status;
-    $display("===============I got this far ch = %p", ch);
 
     if (ch[0] == "+") begin
       $display("DEBUG: unexpected \"+\".");
       // remove the acknowledge from the socket
-      status = server_recv(fd, ch, 0);
+      status = gdb_recv(ch, 0);
     end else
     if (ch[0] == "$") begin
-      status = server_recv(fd, bf, MSG_PEEK);
+      status = gdb_recv(bf, MSG_PEEK);
       // parse command
       case (bf[1])
 //        "x": status = gdb_mem_bin_read();
