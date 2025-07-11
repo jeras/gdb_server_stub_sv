@@ -80,6 +80,17 @@ package gdb_server_stub_pkg;
     // extended remote mode
     bit extended = 1'b0;
 
+    // supported features
+    string features_gdb  [string];
+    string features_stub [string] = '{
+      "QStartNoAckMode": "-",  // TODO: test it
+      "swbreak"        : "+",
+      "hwbreak"        : "+",
+      "error-message"  : "+",
+      "binary-upload"  : "-"   // TODO: for now it is broken
+    };
+
+
     // CPU current state
     state_t state;
 
@@ -279,6 +290,17 @@ package gdb_server_stub_pkg;
     return(hex);
   endfunction: gdb_ascii2hex
 
+  // SyetemVerilog uses spaces as separator for strings and GDB packets don't use spaces
+  function automatic string char2space (
+    input string str,
+    input byte   sep  // separator
+  );
+    for (int unsigned i=0; i<str.len(); i++) begin
+      if (str[i] == sep)  str[i] = byte'(" ");
+    end
+    return(str);
+  endfunction: char2space
+
 ///////////////////////////////////////////////////////////////////////////////
 // GDB state
 ///////////////////////////////////////////////////////////////////////////////
@@ -309,7 +331,6 @@ package gdb_server_stub_pkg;
   function automatic int gdb_error_number_reply (
     input byte val = 0
   );
-    // reply with signal (current state by default)
     return(gdb_send_packet($sformatf("E%02h", val)));
   endfunction: gdb_error_number_reply
 
@@ -318,7 +339,6 @@ package gdb_server_stub_pkg;
   function automatic int gdb_error_text_reply (
     input string str = ""
   );
-    // reply with signal (current state by default)
     return(gdb_send_packet($sformatf("E.%s", gdb_ascii2hex(str))));
   endfunction: gdb_error_text_reply
 
@@ -326,13 +346,19 @@ package gdb_server_stub_pkg;
   function automatic int gdb_console_output (
     input string str
   );
-    // reply with signal (current state by default)
     return(gdb_send_packet($sformatf("O%s", gdb_ascii2hex(str))));
   endfunction: gdb_console_output
 
 ///////////////////////////////////////////////////////////////////////////////
 // GDB query (monitor, )
 ///////////////////////////////////////////////////////////////////////////////
+
+  // send message to GDB console output
+  function automatic int gdb_query_monitor_reply (
+    input string str
+  );
+    return(gdb_send_packet($sformatf("%s", gdb_ascii2hex(str))));
+  endfunction: gdb_query_monitor_reply
 
   // GDB monitor commands
   // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Server.html
@@ -341,13 +367,78 @@ package gdb_server_stub_pkg;
     input string str
   );
     int status;
-    if (str == "help") begin
-      status = gdb_console_output("HELP: There are no monitor commands available.\n");
-      return(1'b1);
-    end else begin
-      return(1'b0);
-    end
+
+    case (str)
+      "help": begin
+        status = gdb_query_monitor_reply({"HELP: Available monitor commands:\n",
+                                          "* set debug on/off.\n"});
+        return(1'b1);
+      end
+      "set debug on": begin
+        debug_log = 1'b1;
+        status = gdb_query_monitor_reply("Enabled debug logging to STDOUT.\n");
+        return(1'b1);
+      end
+      "set debug off": begin
+        debug_log = 1'b0;
+        status = gdb_query_monitor_reply("Disabled debug logging.\n");
+        return(1'b1);
+      end
+      default begin
+        return(1'b0);
+      end
+    endcase
   endfunction: gdb_query_monitor
+
+  // GDB supported features
+  // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Server.html
+  // https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html#General-Query-Packets
+  function automatic bit gdb_query_supported (
+    input string str
+  );
+    int code;
+    int status;
+    string tmp;
+    string feature;
+    string value;
+
+    // parse features supported by the GDB client
+    str = char2space(str, byte'(";"));
+    while ($sscanf(str, "%s", tmp)) begin
+      // add feature and its value (+/-/?)
+      value = string'(tmp[tmp.len()-1]);
+      if (value inside {"+", "-", "?"}) begin
+        feature = tmp.substr(0, tmp.len()-2);
+      end else begin
+        tmp = char2space(tmp, byte'("="));
+        code = $sscanf(str, "%s=%s", feature, value);
+      end
+      features_gdb[feature] = value;
+      // remove the processed feature from the string (unless it is already the last one)
+      if (str.len() > tmp.len()) begin
+        // +1 to skip the space
+        str = str.substr(tmp.len()+1, str.len()-1);
+      end else begin
+        break;
+      end
+    end
+    $display("DEBUG: features_gdb = %p", features_gdb);
+
+    // reply with stub features
+    str = "";
+    foreach (features_stub[feature]) begin
+      if (features_stub[feature] inside {"+", "-", "?"}) begin
+        str = {str, $sformatf("%s%s;", feature, features_stub[feature])};
+      end else begin
+        str = {str, $sformatf("%s=%s;", feature, features_stub[feature])};
+      end
+    end
+    // remove the trailing semicolon
+    str = str.substr(0, str.len()-2);
+    status = gdb_send_packet(str);
+
+    return(0);
+  endfunction: gdb_query_supported
 
   function automatic int gdb_query_packet ();
     string pkt;
@@ -358,6 +449,10 @@ package gdb_server_stub_pkg;
     status = gdb_get_packet(pkt);
 
     // parse various query packets
+    if ($sscanf(pkt, "qSupported:%s", str) > 0) begin
+      $display("DEBUG: qSupported = %p", str);
+      status = gdb_query_supported(str);
+    end else
     if ($sscanf(pkt, "qRcmd,%s", str) > 0) begin
       status = gdb_query_monitor(gdb_hex2ascii(str));
       status = gdb_send_packet("OK");
