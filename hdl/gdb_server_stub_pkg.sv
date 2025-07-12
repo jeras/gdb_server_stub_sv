@@ -71,27 +71,33 @@ package gdb_server_stub_pkg;
 // GDB state
 ///////////////////////////////////////////////////////////////////////////////
 
-    // debug log mode
-    bit debug_log = DEBUG_LOG;
+    typedef struct {
+      bit debug_log;    // debug log mode
+      bit acknowledge;  // acknowledge mode
+      bit extended;     // extended remote mode
+    } stub_state_t;
 
-    // acknowledge mode
-    bit acknowledge = 1'b1;
+    localparam stub_state_t STUB_STATE_INIT = '{
+      debug_log: DEBUG_LOG,
+      acknowledge: 1'b1,
+      extended: 1'b0
+    };
 
-    // extended remote mode
-    bit extended = 1'b0;
+    // initialize stub state
+    stub_state_t stub_state = STUB_STATE_INIT;
 
     // supported features
     string features_gdb  [string];
     string features_stub [string] = '{
       "QStartNoAckMode": "-",  // TODO: test it
-      "swbreak"        : "+",
-      "hwbreak"        : "+",
+      "swbreak"        : "+",  // TODO: actually add it to reply
+      "hwbreak"        : "+",  // TODO: actually add it to reply
       "error-message"  : "+",
       "binary-upload"  : "-"   // TODO: for now it is broken
     };
 
 
-    // CPU current state
+    // CPU architecture current state
     state_t state;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -168,7 +174,7 @@ package gdb_server_stub_pkg;
 
   function automatic int gdb_get_packet(
     output string pkt,
-    input bit    ack = acknowledge
+    input bit    ack = stub_state.acknowledge
   );
     int status;
     int unsigned len;
@@ -191,7 +197,7 @@ package gdb_server_stub_pkg;
 
     // extract packet data from received string
     pkt = str.substr(1,len-4);
-    if (debug_log) begin
+    if (stub_state.debug_log) begin
   //    $display("DEBUG: <= %s", str);
       $display("DEBUG: <- %s", pkt);
     end
@@ -223,14 +229,14 @@ package gdb_server_stub_pkg;
 
   function automatic int gdb_send_packet(
     input string pkt,
-    input bit    ack = acknowledge
+    input bit    ack = stub_state.acknowledge
   );
     int status;
     byte   ch [] = new[1];
     byte   checksum = 0;
     string checksum_str;
 
-    if (debug_log) begin
+    if (stub_state.debug_log) begin
       $display("DEBUG: -> %p", pkt);
     end
 
@@ -375,12 +381,12 @@ package gdb_server_stub_pkg;
         return(1'b1);
       end
       "set debug on": begin
-        debug_log = 1'b1;
+        stub_state.debug_log = 1'b1;
         status = gdb_query_monitor_reply("Enabled debug logging to STDOUT.\n");
         return(1'b1);
       end
       "set debug off": begin
-        debug_log = 1'b0;
+        stub_state.debug_log = 1'b0;
         status = gdb_query_monitor_reply("Disabled debug logging.\n");
         return(1'b1);
       end
@@ -978,7 +984,7 @@ package gdb_server_stub_pkg;
     status = gdb_get_packet(pkt);
 
     // set extended mode
-    extended = 1'b1;
+    stub_state.extended = 1'b1;
 
     // send response
     status = gdb_send_packet("OK");
@@ -1010,8 +1016,8 @@ package gdb_server_stub_pkg;
     // send response (GDB cliend will close the socket connection)
     status = gdb_send_packet("OK");
 
-    // clear extended mode
-    extended = 1'b0;
+    // re-initialize stub state
+    stub_state = STUB_STATE_INIT;
 
     // stop HDL simulation, so the HDL simulator can render waveforms
     $info("GDB: detached, stopping simulation from within state %s.", state.name);
@@ -1049,7 +1055,7 @@ package gdb_server_stub_pkg;
 
     if (ch[0] == "+") begin
       $display("DEBUG: unexpected \"+\".");
-      // remove the acknowledge from the socket
+      // remove the initial welcome acknowledge "+" from the socket
       status = socket_recv(ch, 0);
     end else
     if (ch[0] == "$") begin
