@@ -1,0 +1,3 @@
+[submodule "submodules/nerv"]
+	path = submodules/nerv
+	url = git@github.com:YosysHQ/nerv.git
