@@ -134,6 +134,12 @@ module nerv_gdb #(
       return(1);
     endfunction: arch_jump
 
+//    virtual task automatic arch_step (
+//  
+//    );
+//
+//    endtask: arch_step
+
   endclass: gdb_server_stub_adapter
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -177,6 +183,7 @@ module nerv_gdb #(
         end
 
         CONTINUE: begin
+//          $display("DEBUG: %t: continue.", $realtime);
           // non-blocking socket read
           -> socket_nonblocking;
           status = socket_recv(ch, MSG_PEEK | MSG_DONTWAIT);
@@ -215,10 +222,12 @@ module nerv_gdb #(
         end
 
         STEP: begin
+//          $display("DEBUG: %t: continue.", $realtime);
           // step to the next instruction and trap again
           do begin
             @(posedge clk);
-          end while (~`soc.stall);
+//            $display("DEBUG: %t: continue while loop.", $realtime);
+          end while (`soc.stall);
           gdb.state = SIGTRAP;
 
           // send response

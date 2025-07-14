@@ -64,14 +64,18 @@ module nerv_soc #(
 	end
 
 	nerv cpu (
+		// system signals
 		.clock     (clock     ),
 		.reset     (reset     ),
+		// control state machine
 		.stall     (stall     ),
 		.trap      (trap      ),
-
+		// interrupt
+        .irq       ('0        ),
+        // IFU interface
 		.imem_addr (imem_addr ),
 		.imem_data (imem_data ),
-
+        // LSU interface
 		.dmem_valid(dmem_valid),
 		.dmem_addr (dmem_addr ),
 		.dmem_wstrb(dmem_wstrb),

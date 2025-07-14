@@ -17,7 +17,7 @@ module nerv_tb #(
   logic rst;  // reset
 
   // LEDS
-  wire logic [8-1:0] led;
+  wire logic [32-1:0] led;
 
 ////////////////////////////////////////////////////////////////////////////////
 // RTL SoC instance
