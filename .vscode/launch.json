@@ -11,10 +11,12 @@
             "setupCommands": [
                 { "text": "set logging file ${fileDirname}/gdb.log", "description": "set logging file", "ignoreFailures": false },
                 { "text": "set logging enabled on", "description": "enable logging to file", "ignoreFailures": false },
-                { "text": "set debug remote 1", "description": "enable remote debug messages", "ignoreFailures": false }
+                { "text": "set debug remote 1", "description": "enable remote debug messages", "ignoreFailures": false },
+                { "text": "file ${workspaceFolder}/test/firmware/firmware.elf", "description": "select ELF file", "ignoreFailures": false }
+                { "text": "load", "description": "load program into memory", "ignoreFailures": false }
             ],
             "miDebuggerServerAddress": "${workspaceFolder}/socket",
-            "stopAtEntry": true,
+            "stopAtConnect": true,
             "preLaunchTask": "Run HDL 'firmware'"
 		}
 	]
