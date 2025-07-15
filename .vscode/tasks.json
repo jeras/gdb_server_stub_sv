@@ -1,0 +1,40 @@
+{
+    "version": "1.0.0",
+    "tasks": [
+        {
+            "label": "Build GCC 'firmware'",
+            "type": "shell",
+            "command": "make -C ${workspaceFolder}/test/firmware/",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+						},
+            "problemMatcher": ["$gcc"]
+				},
+        {
+          "label": "Run HDL 'firmware'",
+          "type": "shell",
+          "command": "echo 'HDL started'; SOCKET=${workspaceFolder}/socket make -C ${workspaceFolder}/sim/questa",
+          "dependsOn": ["Build GCC 'firmware'"],
+          "isBackground": true,
+          "problemMatcher": [
+            {
+              "pattern": [
+                {
+                  "regexp": ".",
+                  "file": 1,
+                  "location": 2,
+                  "message": 3
+								}
+							],
+              "background": {
+                "activeOnStart": true,
+                "beginsPattern": ".",
+                "endsPattern": "HDL started",
+							}
+						}
+					]
+				}
+		]
+}

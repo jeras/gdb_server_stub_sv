@@ -1036,8 +1036,8 @@ package gdb_server_stub_pkg;
     // read packet
     status = gdb_get_packet(pkt);
 
-    // enter RESET state
-    state = RESET;
+    // finish simulation
+    $finish();
 
     // do not send packet response here
     return(0);

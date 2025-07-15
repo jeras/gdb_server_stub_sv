@@ -48,6 +48,10 @@ DEF += -defineall NERV_DBGREGS
 # example
 # PAR += -Gparameter=value
 
+# Unix/TCP socket
+SOCKET ?= "gdb_server_stub_socket"
+PAR += -GSOCKET=${SOCKET}
+
 ################################################################################
 # Verilog plusargs
 ################################################################################
@@ -56,25 +60,16 @@ DEF += -defineall NERV_DBGREGS
 # ARG += +key
 # ARG += +key=value
 
-# RIAC-V toolchain
-
-TOOLCHAIN_PREFIX?=/opt/riscv-gcc/bin/riscv32-unknown-elf-
-
 ################################################################################
 # targets
 ################################################################################
 
 # uncomment the GUI target for debugging purposes
 #all: gui
-all: run
+all: sim
 
-firmware.hex:
-	make -C ../../submodules/nerv firmware.hex
-	ln -s ../../submodules/nerv/firmware.elf firmware.elf
-	ln -s ../../submodules/nerv/firmware.hex firmware.hex
-
-run: ${HDL} ${SRC} firmware.hex
+sim: ${HDL} ${SRC}
 	qrun -makelib work -sv ${HDL} -c ${SRC} -end ${DEF} ${PAR} ${FLAGS} ${ARG} -top ${TOP}
 
-gui: ${HDL} ${SRC} firmware.hex
+gui: ${HDL} ${SRC}
 	qrun -makelib work -sv ${HDL} -c ${SRC} -end ${DEF} ${PAR} ${FLAGS} ${ARG} -top ${TOP} -gui
