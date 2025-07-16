@@ -178,6 +178,7 @@ module nerv_gdb #(
           rst = 1'b1;
           repeat (4) @(posedge clk);
           rst <= 1'b0;
+          repeat (1) @(posedge clk);
           // enter trap state
           gdb.state = SIGTRAP;
         end

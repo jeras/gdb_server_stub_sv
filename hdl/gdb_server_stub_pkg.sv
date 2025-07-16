@@ -89,11 +89,14 @@ package gdb_server_stub_pkg;
     // supported features
     string features_gdb  [string];
     string features_stub [string] = '{
-      "QStartNoAckMode": "-",  // TODO: test it
       "swbreak"        : "+",  // TODO: actually add it to reply
       "hwbreak"        : "+",  // TODO: actually add it to reply
       "error-message"  : "+",
-      "binary-upload"  : "-"   // TODO: for now it is broken
+      "binary-upload"  : "-",  // TODO: for now it is broken
+      "multiprocess"   : "-",
+      "ReverseStep"    : "-",
+      "ReverseContinue": "-",
+      "QStartNoAckMode": "-"   // TODO: test it
     };
 
 
@@ -389,6 +392,9 @@ package gdb_server_stub_pkg;
         stub_state.debug_log = 1'b0;
         status = gdb_query_monitor_reply("Disabled debug logging.\n");
         return(1'b1);
+      end
+      "reset": begin
+        state = RESET;
       end
       default begin
         return(1'b0);
