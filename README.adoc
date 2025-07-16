@@ -133,23 +133,87 @@ TODO (difficult):
   (full generalization requires the SystemVerilog simulator to support the `alias` keyword),
 * ...
 
+== VSCode integration
+
+* `useExtendedRemote` https://github.com/microsoft/vscode-cpptools/issues/9505
+
 == References
 
 Additional `maintenance` commands can be found here (useful for RESET functionality?):
 
 https://sourceware.org/gdb/current/onlinedocs/gdb.html/Maintenance-Commands.html
 
-
 https://medium.com/@tatsuo.nomura/implement-gdb-remote-debug-protocol-stub-from-scratch-2-5e3025f0e987
 
 === Various stub implementations
 
-- link:https://tomverbeure.github.io/2022/02/20/GDBWave-Post-Simulation-RISCV-SW-Debugging.html[GDBWave]
-- Zephyr RTOS link:https://github.com/zephyrproject-rtos/zephyr/blob/64ac57abcb90cebdc3e9ed8ea07784134a19a242/subsys/debug/gdbstub/gdbstub.c#L623[gdbstub]
-- OpenOCD link:https://github.com/riscv-collab/riscv-openocd/blob/1aebdf8e3025e8a2ac65a1ebcdccd11448d9b46e/src/server/gdb_server.c#L2917[gdb_server]
-- RISC-V based Virtual Prototype (VP) https://github.com/agra-uni-bremen/riscv-vp/tree/48b2f5877b2368cc466fb0da155db349e676c0b0/vp/src/core/common/gdb-mc[gdb-mc]
-- link:https://github.com/qemu/qemu/tree/master/gdbstub[Qemu gdbstub]
-- link:https://github.com/mborgerson/gdbstub[gdbstub]
+* link:https://tomverbeure.github.io/2022/02/20/GDBWave-Post-Simulation-RISCV-SW-Debugging.html[GDBWave]
+* Zephyr RTOS link:https://github.com/zephyrproject-rtos/zephyr/blob/64ac57abcb90cebdc3e9ed8ea07784134a19a242/subsys/debug/gdbstub/gdbstub.c#L623[gdbstub]
+* OpenOCD link:https://github.com/riscv-collab/riscv-openocd/blob/1aebdf8e3025e8a2ac65a1ebcdccd11448d9b46e/src/server/gdb_server.c#L2917[gdb_server]
+* RISC-V based Virtual Prototype (VP) https://github.com/agra-uni-bremen/riscv-vp/tree/48b2f5877b2368cc466fb0da155db349e676c0b0/vp/src/core/common/gdb-mc[gdb-mc]
+* link:https://github.com/qemu/qemu/tree/master/gdbstub[Qemu gdbstub]
+* link:https://github.com/mborgerson/gdbstub[gdbstub]
+
+More notes on record/replay functionality in GDB:
+
+* link:https://sourceware.org/gdb/current/onlinedocs/gdb.html/Process-Record-and-Replay.html[GDB: Recording Inferior’s Execution and Replaying It],
+* link:https://sourceware.org/gdb/current/onlinedocs/gdb.html/Reverse-Execution.html[GDB: Running programs backward],
+* link:https://developers.redhat.com/articles/2024/08/08/using-gdb-time-travel[Guinevere Larsen: Using GDB to time travel],
+* FOSDEM 2024: Guinevere Larsen: Manipulating time with GDB
+  (link:https://archive.fosdem.org/2024/events/attachments/fosdem-2024-1857-help-us-improve-time-manipulation-with-gdb/slides/22342/FOSDEM_2024_-_Reverse_debugging_t96IjEg.pdf[slides],
+   link:https://archive.fosdem.org/2024/schedule/event/fosdem-2024-1857-help-us-improve-time-manipulation-with-gdb/[video])
+
+=== Major RISC-V simulators
+
+List of major public RISC-V simulators with comments about interfacing with GDB and reverse execution.
+
+* link:https://github.com/riscv-software-src/riscv-isa-sim[spike]
+  link:https://chipyard.readthedocs.io/en/latest/Advanced-Concepts/Chip-Communication.html#using-the-jtag-interface[communicates with GDB through JTAG and OpenOCD]
+  (link:https://github.com/riscv-software-src/riscv-isa-sim?tab=readme-ov-file#debugging-with-gdb[GDB example]),
+  does not seem to support reverse execution),
+* link:https://www.intel.com/content/www/us/en/developer/articles/tool/simics-simulator.html[Intel® Simics® Simulator]
+  has link:https://intel.github.io/tsffs/simics/target-guide-risc-v-simple/index.html[RISC-V] support
+  can be link:https://intel.github.io/tsffs/simics/simics-user-guide/gdb.html[connected with GDB]
+  although link:https://intel.github.io/tsffs/simics/simics-user-guide/revexec.html[reverse execution] can only be done from the native console,
+* link:[QEMU]
+  (link:https://qemu-project.gitlab.io/qemu/system/gdb.html[GDB usage],
+   link:https://qemu-project.gitlab.io/qemu/system/replay.html[Record/replay])
+  the Wiki page link:https://wiki.qemu.org/Features/record-replay[Features/record-replay] indicates record/replay is not tested for RISC-V,
+* link:https://github.com/riscv-ovpsim/imperas-riscv-tests[the last public version of riscvOVPsim]
+
+=== Record/replay and reverse execution
+
+RISC-V and deterministic record/replay tools (2018)
+
+https://groups.google.com/a/groups.riscv.org/g/isa-dev/c/JrJa01hihCQ/m/55rbSlpoAgAJ
+
+How to correctly use QEMU's record/replay functionality? (2025)
+
+https://stackoverflow.com/questions/79670297/how-to-correctly-use-qemus-record-replay-functionality
+
+=== GDB/LLVM integratiion with VSCode
+
+I can see the step/continue backwards buttons.
+
+https://www.justinmklam.com/posts/2017/10/vscode-debugger-setup/
+
+
+BUILD, DEBUG, TEST
+
+https://code.visualstudio.com/docs/debugtest/tasks
+
+=== Application examples
+
+- https://www.youtube.com/watch?v=qLzD33xVcRE&ab_channel=Chuck%27sTechTalk
+- https://github.com/chuckb/riscv-helloworld-c/tree/HC7b1SVXoKM
+- https://twilco.github.io/riscv-from-scratch/2019/04/27/riscv-from-scratch-2.html
+
+=== RISC-V verification interfaces
+
+This are interfaces exposing retired instructions, and are useful as an abstraction layer between the CPU and the GDB stub.
+
+* link:https://github.com/riscv-verification/RVVI[RISC-V Verification Interface (RVVI)],
+* link:https://github.com/SymbioticEDA/riscv-formal/blob/master/docs/rvfi.md[RISC-V Formal Interface (RVFI)] from the link:https://github.com/SymbioticEDA/riscv-formal[RISC-V Formal Verification Framework]
 
 === DPI:
 

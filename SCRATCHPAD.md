@@ -132,3 +132,10 @@ https://www.reddit.com/r/FPGA/comments/nfkuq6/modelsim_fatal_vsim3828_could_not_
 
 12898971238912389712783490823_abcdef689_02348923
 12898971_23891238_97127834_90823_abcdef689_02348923
+
+# record/replay/trace
+
+`set record btrace cpu _identifier_` `none`
+
+`record full`
+
