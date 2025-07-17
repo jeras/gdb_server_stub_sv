@@ -2,20 +2,51 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug RISC-V",
+            "name": "Debug RISC-V with GCC",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/test/firmware/firmware.elf",
             "cwd": "${workspaceFolder}/test/firmware",
             "miDebuggerPath": "/opt/riscv-gcc/bin/riscv32-unknown-elf-gdb",
+            "useExtendedRemote": true,
             "setupCommands": [
                 { "text": "set logging file ${fileDirname}/gdb.log", "description": "set logging file", "ignoreFailures": false },
                 { "text": "set logging enabled on", "description": "enable logging to file", "ignoreFailures": false },
-                { "text": "set debug remote 1", "description": "enable remote debug messages", "ignoreFailures": false },
-                { "text": "file ${workspaceFolder}/test/firmware/firmware.elf", "description": "select ELF file", "ignoreFailures": false }
-                { "text": "load", "description": "load program into memory", "ignoreFailures": false }
+                { "text": "set debug remote 1", "description": "enable remote debug messages", "ignoreFailures": false }
             ],
-            "miDebuggerServerAddress": "${workspaceFolder}/socket",
+            "customLaunchSetupCommands": [
+            ],
+            "postRemoteConnectCommands": [
+                { "text": "file ${workspaceFolder}/test/firmware/firmware.elf", "description": "select ELF file", "ignoreFailures": false },
+                { "text": "target extended-remote ${workspaceFolder}/socket", "description": "connect to stub socket", "ignoreFailures": false },
+                { "text": "load", "description": "load program into memory", "ignoreFailures": false },
+                { "text": "monitor reset", "description": "reset target and allign to first instruction", "ignoreFailures": false }
+            ],
+            "hardwareBreakpoints": { "require": true },
+            "stopAtConnect": true,
+            "preLaunchTask": "Run HDL 'firmware'"
+		},
+        {
+            "name": "Debug RISC-V with LLDB",
+            "type": "lldb-dap",
+            "request": "launch",
+            "program": "${workspaceFolder}/test/firmware/firmware.elf",
+            "cwd": "${workspaceFolder}/test/firmware",
+            "useExtendedRemote": true,
+            "setupCommands": [
+                { "text": "set logging file ${fileDirname}/gdb.log", "description": "set logging file", "ignoreFailures": false },
+                { "text": "set logging enabled on", "description": "enable logging to file", "ignoreFailures": false },
+                { "text": "set debug remote 1", "description": "enable remote debug messages", "ignoreFailures": false }
+            ],
+            "customLaunchSetupCommands": [
+            ],
+            "postRemoteConnectCommands": [
+                { "text": "file ${workspaceFolder}/test/firmware/firmware.elf", "description": "select ELF file", "ignoreFailures": false },
+                { "text": "target extended-remote ${workspaceFolder}/socket", "description": "connect to stub socket", "ignoreFailures": false },
+                { "text": "load", "description": "load program into memory", "ignoreFailures": false },
+                { "text": "monitor reset", "description": "reset target and allign to first instruction", "ignoreFailures": false }
+            ],
+            "hardwareBreakpoints": { "require": true },
             "stopAtConnect": true,
             "preLaunchTask": "Run HDL 'firmware'"
 		}
