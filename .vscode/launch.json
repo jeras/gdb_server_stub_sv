@@ -9,6 +9,9 @@
             "cwd": "${workspaceFolder}/test/firmware",
             "miDebuggerPath": "/opt/riscv-gcc/bin/riscv32-unknown-elf-gdb",
             "useExtendedRemote": true,
+            "logging": {
+                "engineLogging": true,
+            },
             "setupCommands": [
                 { "text": "set logging file ${fileDirname}/gdb.log", "description": "set logging file", "ignoreFailures": false },
                 { "text": "set logging enabled on", "description": "enable logging to file", "ignoreFailures": false },
