@@ -154,6 +154,8 @@ https://medium.com/@tatsuo.nomura/implement-gdb-remote-debug-protocol-stub-from-
 * link:https://github.com/qemu/qemu/tree/master/gdbstub[Qemu gdbstub]
 * link:https://github.com/mborgerson/gdbstub[gdbstub]
 
+* GDB connection flow https://www.embecosm.com/appnotes/ean4/html/ch03s03s01.html
+
 More notes on record/replay functionality in GDB:
 
 * link:https://sourceware.org/gdb/current/onlinedocs/gdb.html/Process-Record-and-Replay.html[GDB: Recording Inferior’s Execution and Replaying It],
@@ -201,6 +203,16 @@ https://www.justinmklam.com/posts/2017/10/vscode-debugger-setup/
 BUILD, DEBUG, TEST
 
 https://code.visualstudio.com/docs/debugtest/tasks
+
+Alternative way to start the simulator (`debugServerPath`/`debugServerArgs`/`serverStarted`), instead of doing it as a task:
+
+https://stackoverflow.com/questions/58048139/enable-semi-hosting-automatically-in-gdb-after-connecting-to-a-remote-target
+
+==== LLDB
+
+VSCode link:https://marketplace.visualstudio.com/items?itemName=vadimcn.vscode-lldb[extension] and
+link:https://github.com/llvm/vscode-lldb[source code],
+link:https://microsoft.github.io/debug-adapter-protocol/[DAP protocol].
 
 === Application examples
 
