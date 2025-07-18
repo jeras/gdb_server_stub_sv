@@ -8,6 +8,11 @@
             "program": "${workspaceFolder}/test/firmware/firmware.elf",
             "cwd": "${workspaceFolder}/test/firmware",
             "miDebuggerPath": "/opt/riscv-gcc/bin/riscv32-unknown-elf-gdb",
+            "miDebuggerServerAddress": "${workspaceFolder}/socket",
+            "debugServerPath": "make",
+            "debugServerArgs": "SOCKET=${workspaceFolder}/socket -C ${workspaceFolder}/sim/questa",
+            "serverStarted": "Loading",
+            "externalConsole": true,
             "useExtendedRemote": true,
             "logging": {
                 "engineLogging": true,
@@ -21,13 +26,12 @@
             ],
             "postRemoteConnectCommands": [
                 { "text": "file ${workspaceFolder}/test/firmware/firmware.elf", "description": "select ELF file", "ignoreFailures": false },
-                { "text": "target extended-remote ${workspaceFolder}/socket", "description": "connect to stub socket", "ignoreFailures": false },
                 { "text": "load", "description": "load program into memory", "ignoreFailures": false },
                 { "text": "monitor reset", "description": "reset target and allign to first instruction", "ignoreFailures": false }
             ],
             "hardwareBreakpoints": { "require": true },
             "stopAtConnect": true,
-            "preLaunchTask": "Run HDL 'firmware'"
+            "preLaunchTask": "Build GCC 'firmware'"
 		},
         {
             "name": "Debug RISC-V with LLDB",
