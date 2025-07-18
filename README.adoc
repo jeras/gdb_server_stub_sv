@@ -193,7 +193,7 @@ How to correctly use QEMU's record/replay functionality? (2025)
 
 https://stackoverflow.com/questions/79670297/how-to-correctly-use-qemus-record-replay-functionality
 
-=== GDB/LLVM integratiion with VSCode
+=== GDB/LLVM integration with VSCode
 
 I can see the step/continue backwards buttons.
 
