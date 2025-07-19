@@ -15,7 +15,7 @@
         {
           "label": "Run HDL 'firmware'",
           "type": "shell",
-          "command": "echo 'HDL started'; SOCKET=${workspaceFolder}/socket make -C ${workspaceFolder}/sim/questa",
+          "command": "SOCKET=${workspaceFolder}/socket make -C ${workspaceFolder}/sim/questa",
           "dependsOn": ["Build GCC 'firmware'"],
           "isBackground": true,
           "problemMatcher": [
