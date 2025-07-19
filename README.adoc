@@ -137,6 +137,94 @@ TODO (difficult):
 
 * `useExtendedRemote` https://github.com/microsoft/vscode-cpptools/issues/9505
 
+== VSCode and time travel debugging
+
+First, VSCode with the link:https://github.com/microsoft/vscode-cpptools[vscode-cpptools] extension
+does support backwards step/continue.
+A simple prof would be this link:https://www.justinmklam.com/posts/2017/10/vscode-debugger-setup/[example]
+(check the debugger buttons).
+However this is not a common feature and there are no complete examples
+documenting the steps necessary to enable this feature.
+
+Microsoft provides a document describing how a
+link:https://code.visualstudio.com/api/extension-guides/debugger-extension[debugger extension]
+implementing a debugger adapter (DA) connects VScode and a debugger.
+
+*VSCode* <-_DAP_-> *DA* <- _GDB/MI_ -> *GDB/LLVM*
+
+VSCode using the the link:https://microsoft.github.io/debug-adapter-protocol/[debug adapter protocol (DAP)]
+communicates with the link:https://github.com/Microsoft/vscode-cpptools[debug adapter (DA)]
+(with link:https://github.com/microsoft/vscode-debugadapter-node[VS Code Debug Protocol and Debug Adapter])
+which uses the link:https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI.html[GDB machine interface (GDB/MI) protocol]
+to communicate with GDB/LLVM.
+
+During link:https://microsoft.github.io/debug-adapter-protocol/overview[*Launch Sequencing*]
+the debug adapter should ask the debugger GDB/LLVM about capabilities/features.
+
+The link:https://microsoft.github.io/debug-adapter-protocol/specification#Requests_Initialize[DAP protocol]
+provides capabilities as a `InitializeResponse` to a `InitializeRequest`.
+
+DAP protocol requests
+link:https://microsoft.github.io/debug-adapter-protocol/specification#Requests_StepBack[`StepBack`]
+link:https://microsoft.github.io/debug-adapter-protocol/specification#Requests_ReverseContinue[`ReverseContinueRequest`]
+are available if the
+link:https://microsoft.github.io/debug-adapter-protocol/specification#Types_Capabilities[`supportsStepBack`] capability is `true`.
+
+Related capabilities are:
+
+* link:https://microsoft.github.io/debug-adapter-protocol/specification#Types_Capabilities[`supportsSteppingGranularity`]
+  since requests
+  link:https://microsoft.github.io/debug-adapter-protocol/specification#Requests_Next[`Next`],
+  link:https://microsoft.github.io/debug-adapter-protocol/specification#Requests_StepIn[`StepIn`],
+  link:https://microsoft.github.io/debug-adapter-protocol/specification#Requests_StepOut[`StepOut`] and
+  link:https://microsoft.github.io/debug-adapter-protocol/specification#Requests_StepBack[`StepBack`]
+  have as part of request arguments the
+  link:https://microsoft.github.io/debug-adapter-protocol/specification#Types_SteppingGranularity[`SteppingGranularity`].
+
+* link:https://microsoft.github.io/debug-adapter-protocol/specification#Types_Capabilities[`supportsInstructionBreakpoints`]
+  is required for the availability of request
+  link:https://microsoft.github.io/debug-adapter-protocol/specification#Requests_SetInstructionBreakpoints[`SetInstructionBreakpoints`].
+
+* link:https://microsoft.github.io/debug-adapter-protocol/specification#Types_Capabilities[`supportsDisassembleRequest`]
+  is required for availability of request
+  link:https://microsoft.github.io/debug-adapter-protocol/specification#Requests_Disassemble[`Disassemble`].
+
+
+== QEMU ARM record/replay demo with VSCode
+
+Since QEMU record/replay functionality is not fully supported for the RISC-V ISA,
+this example will use the ARM ISA, to showcase QEMU record/replay and
+time travel debugging within VSCode.
+
+Install ARM/RISC-V cross compiler:
+
+```sh
+sudo apt install gcc-riscv64-unknown-elf gdb-riscv64-unknown-elf
+sudo apt install gcc-arm-none-eabi gdb-arm-none-eabi
+```
+
+Install ARM/RISC-V QEMU system emulator:
+
+```sh
+sudo apt install qemu-system-riscv32 qemu-system-riscv64
+sudo apt install qemu-system-arm
+```
+
+=== link:https://github.com/dwelch67/qemu_arm_samples/tree/master[`qemu_arm_samples`]
+
+Press `Ctrl-A, x` to exit emulation.
+
+```sh
+make -C uart01/ ARMGNU=arm-none-eabi
+qemu-system-arm -M versatilepb -m 128M -nographic -kernel uart01/notmain.bin
+qemu-system-arm -M versatilepb -m 128M -nographic -kernel uart01/notmain.bin -icount shift=auto,rr=record,rrfile=replay.bin
+qemu-system-arm -M versatilepb -m 128M -nographic -kernel uart01/notmain.bin -icount shift=auto,rr=replay,rrfile=replay.bin 
+```
+
+```sh
+qemu-system-arm -M versatilepb -m 128M -nographic -kernel uart01/notmain.bin -S
+```
+
 == References
 
 Additional `maintenance` commands can be found here (useful for RESET functionality?):
