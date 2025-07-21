@@ -7,7 +7,13 @@ My viewpoint when writing this comments is related to three of my projects:
 
 1. My RISC-V CPU ["R5P DEGU"]().
 2. My TCB system bus standard.
-3. My GDB stub for debugging SW running on a CPU within a HDL simulation.
+3. My [GDB stub](https://github.com/jeras/gdb_server_stub_sv)
+   for debugging SW running on a CPU within a HDL simulation.
+
+I started using NERV in my GDB stu project,
+because the CPU is simple (contains no synthesis optimizations),
+and since the RVFI can be used as a standard layer
+for porting the project to other CPU/SoC.
 
 ## Separation of CPU and formal code
 
@@ -83,4 +89,92 @@ I would have two use cases for the RVFI interface:
    [_Leaky abstraction_](https://en.wikipedia.org/wiki/Leaky_abstraction).
      
 
-## Adding `imem_valid`
+## Adding `imem_valid` and handshake backpressure `*_ready`
+
+The NERV IFU bus interface lacks any handshake signals.
+This results in the following effects:
+
+* IFU appears to start from reset with a fetch from RESET_ADDR-4.
+* IFU performs a repeated instruction read during every LOAD instruction.
+
+By adding a backpressure READY signal to IFU/LSU,
+the interfaces would have a proper AXI handshake
+making them more intuitive to developers with experience with the VALID/READY handshake.
+
+I have not yet done a proper analysis on which between IFU/LSU
+should be given priority on the bus while accessing the same memory.
+The correct priority would prevent lockups.
+
+My CPU also makes repeated fetches of the same instruction,
+but only in case of a stall caused by backpressure on the LSU interface.
+
+TCB (tightly coupled bus) is an extension of the SRAM read/write interface with:
+
+* a READY signal for backpressure,
+* while SRAM ready has always a single cycle (1) delay,
+  TCB allows the delay to be configurable (0, 1, 2, ...).
+
+## Synchronous/asynchronous reset and `reset_q`
+
+Currently `reset` is implemented as a synchronous signals (common in FPGA).
+
+The code could be modified to support an asynchronous reset.
+The distinction between synchronous and asynchronous reset
+could be limited to the syntax of `always` statements:
+
+* `always @(posedge clock, posedge reset)` for asynchronous reset,
+* `always @(posedge clock)` for synchronous reset.
+
+For some logic the reset condition is `reset || reset_q`
+where `reset_q` is delayed by a clock period and `stall`.
+This means reset is applied to some registers for more than one clock period
+which I find unnecessary.
+
+I think the control logic FSM could be made simpler by rewriting the reset logic
+and more practical by using interface backpressure instead of stall.
+
+## Single cycle (CPI=1) execution of LOAD instructions
+
+My CPU is similar to NERV, especially the IFU.
+To avoid the added clock cycle for LSU loads
+I added a write back (WB stage).
+All GPR write back is delayed by one clock period,
+so LSU read data never happens in the same cycle as other WB operations.
+A bypass is added to avoid hazards.
+
+I do not think this would be important for this CPU,
+I'm mentioning it, since it can be added to the CPU without too much effort.
+
+## C instructions and misaligned IFU/LSU accesses
+
+I suspect the current implementation does not have C support
+since C instructions support also requires support for misaligned
+IFU interface access.
+
+In the spirit of this CPU lacking synthesis optimizations,
+the best approach would probably be to translate
+16-bit instructions into 32-bit instructions.
+
+The C instructions contain many exceptions resulting in reserved opcodes (and hints).
+This would significantly increases the complexity
+of properly decoding illegal instructions.
+
+The current NERV LSU lacks support for misaligned accesses.
+
+I wrote a simple [SRAM adapter](https://github.com/jeras/TCB/blob/main/hdl/rtl/lib/tcb_lib_misaligned_memory_controller.sv)
+which handles misaligned access transparently.
+
+I know LSU misaligned accesses are not very important,
+I mention them, since I spent some time studying and implementing them.
+
+## RISCOF and RVFI
+
+I have ported 2 of my CPUs and I helped a newcomer port RISCOF on Reddit.
+Still RISCOF lacks simple examples.
+
+For debugging discrepancies between the reference simulator and the DUT
+I enabled logging in spike and created a log of retired instructions for the DUT.
+With this finding where in the code the simulator and the DUT diverge
+requires only performing a diff between the two logs.
+
+A CPU with an existing RVFI makes it simple to log retired instructions.
