@@ -44,16 +44,29 @@ module nerv_gdb #(
 
   class gdb_server_stub_adapter #(
     // 8/16/32/64 bit CPU selection
-    parameter  int unsigned XLEN = 32,
+    parameter  int unsigned XLEN = 32,  // register/address/data width
+    parameter  int unsigned ILEN = 32,  // maximum instruction width
     parameter  type         SIZE_T = int unsigned,  // could be longint (RV64), but it results in warnings
     // number of all registers
-    parameter  int unsigned RNUM = GNUM+1,
+    parameter  int unsigned GPRN =   32,       // GPR number
+    parameter  int unsigned CSRN = 4096,       // CSR number  TODO: should be a list of indexes
+    parameter  int unsigned REGN = GPRN+CSRN,  // combined register number
+    // memory map (shadow memory map)
+    parameter  int unsigned MEMN = 1,          // memory regions number
+    parameter  type         MMAP_T = struct {SIZE_T base; SIZE_T size;},
+    parameter  MMAP_T       MMAP [0:MEMN-1] = '{default: '{base: 0, size: 256}},
     // DEBUG parameters
     parameter  bit DEBUG_LOG = 1'b1
-  ) extends gdb_server_stub_socket #(
-    .XLEN      (XLEN),
+  ) extends gdb_server_stub #(
+    .XLEN      (XLEN  ),
+    .ILEN      (ILEN  ),
     .SIZE_T    (SIZE_T),
-    .RNUM      (RNUM),
+    .GPRN      (GPRN  ),
+    .CSRN      (CSRN  ),
+    .REGN      (REGN  ),
+    .MEMN      (MEMN  ),
+    .MMAP_T    (MMAP_T),
+    .MMAP      (MMAP  ),
     .DEBUG_LOG (DEBUG_LOG)
   );
 
@@ -64,9 +77,82 @@ module nerv_gdb #(
       super.new(
         .socket (socket)
       );
-      // debugger starts in the reset state
-      state = RESET;
     endfunction: new
+
+    /////////////////////////////////////////////
+    // reset and step
+    /////////////////////////////////////////////
+
+    virtual task dut_reset;
+      // go through a reset sequence
+      rst = 1'b1;
+      repeat (4) @(posedge clk);
+      rst <= 1'b0;
+      repeat (1) @(posedge clk);
+    endtask: dut_reset
+
+    virtual task dut_step (
+      ref retired_t ret
+    );
+      // wait for an instruction to retire
+      do begin
+        @(posedge clk);
+      end while (~`cpu.next_rvfi_valid);
+
+      // TODO: first make synchorous samples into temporary signals
+      // then populate the structure
+      ret.ifu.adr <= `cpu.npc;
+      ret.ifu.ins <= `cpu.insn;
+      ret.ifu.ill <= 1'b0;
+      ret.gpr = new[1];
+      ret.gpr[0].idx <= `cpu.next_wr & `cpu.wr_rd;
+      ret.gpr[0].val <= `cpu.next_rd;
+      ret.lsu.adr <= `cpu.dmem_addr;
+      if (`cpu.dmem_valid & `cpu.mem_wr_enable) begin
+        int unsigned     siz = 2**`cpu.insn_funct3[1:0];
+        logic [XLEN-1:0] val = `cpu.mem_wr_data;
+        ret.lsu.val = new[siz];
+        ret.lsu.val <= {<<8{val}};
+      end
+    endtask: dut_step
+
+
+    // instruction retirement history log entry
+    typedef struct {
+      // instruction fetch unit
+      struct {
+        bit [XLEN-1:0] adr;  // instruction address
+        bit [ILEN-1:0] ins;  // instruction
+        bit            ill;  // illegal instruction
+      } ifu;
+      // GPRs (NOTE: 4-state values)
+      struct {
+        bit      [5-1:0] idx;  // GPR index
+        logic [XLEN-1:0] old;  // old value
+        logic [XLEN-1:0] val;  // new value
+      } gpr [];
+      // CSRs (NOTE: 2-state values)
+      struct {
+        bit     [12-1:0] idx;  //
+        bit   [XLEN-1:0] rdt;  // old value
+        bit   [XLEN-1:0] wdt;  // new value after write
+      } csr [];
+      // memory (access size is encoded in array size)
+      struct {
+        bit   [XLEN-1:0] adr;     // data address
+        array_t          old [];  // read  data (old data)
+        array_t          val [];  // write data (new data)
+      } lsu;
+    } retired_t;
+
+
+
+
+    virtual task dut_jump (
+      input  SIZE_T adr
+    );
+      $error("step/continue address jump is not supported");
+    endtask: dut_jump
 
     /////////////////////////////////////////////
     // register/memory access function overrides
@@ -110,142 +196,20 @@ module nerv_gdb #(
       return(0);
     endfunction: dut_mem_write
 
-    virtual function automatic bit dut_illegal (
-      input  SIZE_T adr
-    );
-      // TODO: implement proper illegal instruction check
-      dut_illegal = $isunknown({`mem(adr+1), `mem(adr+0)}) ? 1'b1 : 1'b0;
-//      $display("DBG: dut_illegal[%08x] = %04x", adr, {`mem(adr+1), `mem(adr+0)});
-    endfunction: dut_illegal
-
-    virtual function automatic bit dut_break (
-      input  SIZE_T adr
-    );
-      // TODO: implement proper illegal instruction check
-//    mem_ebreak = ({                          `mem(adr+1), `mem(adr+0)} == 16'hxxxx) ||
-//                 ({`mem(adr+3), `mem(adr+2), `mem(adr+1), `mem(adr+0)} == 32'hxxxxxxxx) ? 1'b1 : 1'b0;
-      dut_break = 1'b0;
-    endfunction: dut_break
-
-    virtual function automatic bit dut_jump (
-      input  SIZE_T adr
-    );
-      $error("step/continue address jump is not supported");
-      return(1);
-    endfunction: dut_jump
-
-//    virtual task automatic dut_step (
-//  
-//    );
-//
-//    endtask: dut_step
-
   endclass: gdb_server_stub_adapter
 
 ///////////////////////////////////////////////////////////////////////////////
 // main loop
 ///////////////////////////////////////////////////////////////////////////////
 
-  event socket_blocking;
-  event socket_nonblocking;
-
-//  task step;
-//    do begin
-//      @(posedge clk);
-//    end while (~(bus_trn & bus_xen));
-//  endtask: step
-
+  // create GDB socket object
   gdb_server_stub_adapter gdb;
 
   initial
   begin: main_initial
-    static byte ch [] = new[1];
-    int status;
-
-    // set RESET
-    rst = 1'b1;
-
-    // create GDB socket object
     gdb = new(SOCKET);
-
-    // main loop/FSM
-    forever
-    begin: main_loop
-      case (gdb.state)
-
-        RESET: begin
-          // go through a reset sequence
-          rst = 1'b1;
-          repeat (4) @(posedge clk);
-          rst <= 1'b0;
-          repeat (1) @(posedge clk);
-          // enter trap state
-          gdb.state = SIGTRAP;
-        end
-
-        CONTINUE: begin
-//          $display("DEBUG: %t: continue.", $realtime);
-          // non-blocking socket read
-          -> socket_nonblocking;
-          status = socket_recv(ch, MSG_PEEK | MSG_DONTWAIT);
-
-          // if empty, check for breakpoints/watchpoints and continue
-          if (status != 1) begin
-            // on clock edge sample system buses
-            @(posedge clk);
-
-            // check for illegal instructions and hardware/software breakpoints
-            if (~`soc.stall) begin
-              gdb.state = gdb.gdb_breakpoint_match(`soc.imem_addr);
-            end
-
-            // check for hardware watchpoints
-            if (~`soc.stall & `soc.dmem_valid) begin
-              gdb.state = gdb.gdb_watchpoint_match(
-                `soc.dmem_addr,
-                `cpu.mem_wr_enable,
-                `cpu.insn_funct3
-              );
-            end
-
-          // in case of Ctrl+C (character 0x03)
-          end else if (ch[0] == SIGQUIT) begin
-            // TODO: perhaps step to next instruction
-            gdb.state = SIGINT;
-            $display("DEBUG: Interrupt SIGQUIT (0x03) (Ctrl+c).");
-            // send response
-            status = gdb.gdb_stop_reply(gdb.state);
-
-          // parse packet and loop back
-          end else begin
-            status = gdb.gdb_packet(ch);
-          end
-        end
-
-        STEP: begin
-//          $display("DEBUG: %t: continue.", $realtime);
-          // step to the next instruction and trap again
-          do begin
-            @(posedge clk);
-//            $display("DEBUG: %t: continue while loop.", $realtime);
-          end while (`soc.stall);
-          gdb.state = SIGTRAP;
-
-          // send response
-          status = gdb.gdb_stop_reply(gdb.state);
-        end
-
-        // SIGILL, SIGTRAP, SIGINT, ...
-        default: begin
-          // blocking socket read
-          -> socket_blocking;
-          status = socket_recv(ch, MSG_PEEK);
-
-          // parse packet and loop back
-          status = gdb.gdb_packet(ch);
-        end
-      endcase
-    end: main_loop
+    // start state machine
+    gdb.gdb_fsm();
   end: main_initial
 
   final

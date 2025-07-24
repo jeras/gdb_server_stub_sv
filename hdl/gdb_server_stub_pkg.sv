@@ -15,6 +15,7 @@ package gdb_server_stub_pkg;
 
   // state
   typedef enum byte {
+    SIGNONE = 8'd00,
     // signals
     SIGHUP  = 8'd01,  // Hangup
     SIGINT  = 8'd02,  // Terminal interrupt signal
@@ -30,13 +31,7 @@ package gdb_server_stub_pkg;
     SIGSYS  = 8'd12,
     SIGPIPE = 8'd13,  // Write on a pipe with no one to read it
     SIGALRM = 8'd14,  // Alarm clock
-    SIGTERM = 8'd15,  // Termination signal
-    // reset
-    RESET    = 8'h80,
-    // running continuously
-    CONTINUE = 8'h81,
-    // running step
-    STEP     = 8'h82
+    SIGTERM = 8'd15   // Termination signal
   } signal_t;
 
   // point type
@@ -55,20 +50,19 @@ package gdb_server_stub_pkg;
     pkind_t pkind;
   } point_t;
 
-  virtual class gdb_server_stub_socket #(
+  virtual class gdb_server_stub #(
     // 8/16/32/64 bit CPU selection
     parameter  int unsigned XLEN = 32,  // register/address/data width
     parameter  int unsigned ILEN = 32,  // maximum instruction width
-    parameter  int unsigned GNUM = 32,  // GPR number
     parameter  type         SIZE_T = int unsigned,  // could be longint (RV64), but it results in warnings
     // number of all registers
     parameter  int unsigned GPRN =   32,       // GPR number
     parameter  int unsigned CSRN = 4096,       // CSR number  TODO: should be a list of indexes
-    parameter  int unsigned RNUM = GPRN+CSRN,  // combined register number
+    parameter  int unsigned REGN = GPRN+CSRN,  // combined register number
     // memory map (shadow memory map)
     parameter  int unsigned MEMN = 1,          // memory regions number
     parameter  type         MMAP_T = struct {SIZE_T base; SIZE_T size;},
-    parameter  MMAP_T       MMAP [0: MEMN-1] = '{default: '{base: 0, size: 256}},
+    parameter  MMAP_T       MMAP [0:MEMN-1] = '{default: '{base: 0, size: 256}},
     // DEBUG parameters
     parameter  bit DEBUG_LOG = 1'b1
   );
@@ -122,6 +116,8 @@ package gdb_server_stub_pkg;
       // instruction fetch unit
       struct {
         bit [XLEN-1:0] adr;  // instruction address
+        bit [ILEN-1:0] ins;  // instruction
+        bit            ill;  // illegal instruction
       } ifu;
       // GPRs (NOTE: 4-state values)
       struct {
@@ -178,13 +174,9 @@ package gdb_server_stub_pkg;
       // signal
       dut.shd.sig = SIGTRAP;
       // array of memory regions
-      shd.mem = new[$size(MMAP)];
-      for (int unsigned i; i<$size(MMAP); i++) begin
-        shd.mem[i] = new[MMAP[i].size];
+      for (int unsigned i=0; i<$size(MMAP); i++) begin
+        dut.shd.mem[i] = new[MMAP[i].size];
       end
-
-      // start state machine
-      gdb_fsm();
     endfunction: new
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -194,7 +186,12 @@ package gdb_server_stub_pkg;
     pure virtual task dut_reset;
 
     pure virtual task dut_step (
-      output retired_t ret
+      ref retired_t ret
+    );
+
+    // TODO: handle PC write errors
+    pure virtual task dut_jump (
+      input  SIZE_T adr
     );
 
     pure virtual function bit [XLEN-1:0] dut_reg_read (
@@ -214,11 +211,6 @@ package gdb_server_stub_pkg;
     pure virtual function bit dut_mem_write (
       input  SIZE_T adr,
       input  byte   dat
-    );
-
-    // TODO: handle PC write errors
-    pure virtual function bit dut_jump (
-      input  SIZE_T adr
     );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -432,7 +424,7 @@ package gdb_server_stub_pkg;
   // GDB monitor commands
   // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Server.html
   // https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html#General-Query-Packets
-  function automatic bit gdb_query_monitor (
+  task gdb_query_monitor (
     input string str
   );
     int status;
@@ -441,26 +433,22 @@ package gdb_server_stub_pkg;
       "help": begin
         status = gdb_query_monitor_reply({"HELP: Available monitor commands:\n",
                                           "* set debug on/off.\n"});
-        return(1'b1);
       end
       "set debug on": begin
         stub_state.debug_log = 1'b1;
         status = gdb_query_monitor_reply("Enabled debug logging to STDOUT.\n");
-        return(1'b1);
       end
       "set debug off": begin
         stub_state.debug_log = 1'b0;
         status = gdb_query_monitor_reply("Disabled debug logging.\n");
-        return(1'b1);
       end
       "reset": begin
-        state = RESET;
+        dut_reset;
       end
       default begin
-        return(1'b0);
       end
     endcase
-  endfunction: gdb_query_monitor
+  endtask: gdb_query_monitor
 
   // GDB supported features
   // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Server.html
@@ -512,7 +500,8 @@ package gdb_server_stub_pkg;
     return(0);
   endfunction: gdb_query_supported
 
-  function automatic int gdb_query_packet ();
+  task gdb_query_packet ();
+//  function automatic int gdb_query_packet ();
     string pkt;
     string str;
     int status;
@@ -526,14 +515,16 @@ package gdb_server_stub_pkg;
       status = gdb_query_supported(str);
     end else
     if ($sscanf(pkt, "qRcmd,%s", str) > 0) begin
-      status = gdb_query_monitor(gdb_hex2ascii(str));
+      gdb_query_monitor(gdb_hex2ascii(str));
+      //status = gdb_query_monitor(gdb_hex2ascii(str));
       status = gdb_send_packet("OK");
     end else begin
       // not supported, send empty response packet
       status = gdb_send_packet("");
     end
-    return(0);
-  endfunction: gdb_query_packet
+//    return(0);
+  endtask: gdb_query_packet
+//  endfunction: gdb_query_packet
 
 ///////////////////////////////////////////////////////////////////////////////
 // GDB verbose
@@ -724,7 +715,7 @@ package gdb_server_stub_pkg;
     status = gdb_get_packet(pkt);
 
     pkt = "";
-    for (int unsigned i=0; i<RNUM; i++) begin
+    for (int unsigned i=0; i<REGN; i++) begin
       // swap byte order since they are sent LSB first
       val = {<<8{dut_reg_read(i)}};
       case (XLEN)
@@ -751,7 +742,7 @@ package gdb_server_stub_pkg;
     pkt = pkt.substr(1, pkt.len()-1);
 
     // GPR
-    for (int unsigned i=0; i<RNUM; i++) begin
+    for (int unsigned i=0; i<REGN; i++) begin
       `ifdef VERILATOR
       status = $sscanf(pkt.substr(i*len, i*len+len-1), "%h", val);
 `else
@@ -914,29 +905,31 @@ package gdb_server_stub_pkg;
 
   // this function is called from the SoC adapter and not from the packet parser
   function automatic signal_t gdb_breakpoint_match (
-    input bit [XLEN-1:0] addr
+    input retired_t ret
   );
     int status;
     signal_t tmp = dut.shd.sig;
+    SIZE_T   adr = ret.ifu.adr;
 
     // match illegal instruction
-    if (dut_illegal(addr)) begin
+    if (ret.ifu.ill) begin
       tmp = SIGILL;
-      $display("DEBUG: Triggered illegal instruction at address %h.", addr);
+      $display("DEBUG: Triggered illegal instruction at address %h.", adr);
       status = gdb_stop_reply(tmp);
     end else
     // match EBREAK/C.EBREAK instruction (software breakpoint)
-    if (dut_break(addr)) begin
+    // TODO: there are also explicit SW breakpoints that depend on ILEN
+    if ((ret.ifu.ins[32-1:0] == 32'h00100073) ||
+        (ret.ifu.ins[16-1:0] == 16'h9002)) begin
       tmp = SIGTRAP;
-      $display("DEBUG: Triggered SW breakpoint at address %h.", addr);
+      $display("DEBUG: Triggered SW breakpoint at address %h.", adr);
       status = gdb_stop_reply(tmp);
     end else
     // match hardware breakpoint
-    if (points.exists(addr)) begin
-      // TODO: there are also explicit SW breakpoints that depend on ILEN
-      if (points[addr].ptype == hwbreak) begin
+    if (points.exists(adr)) begin
+      if (points[adr].ptype == hwbreak) begin
         tmp = SIGTRAP;
-        $display("DEBUG: Triggered HW breakpoint at address %h.", addr);
+        $display("DEBUG: Triggered HW breakpoint at address %h.", adr);
         status = gdb_stop_reply(tmp);
       end
     end
@@ -945,21 +938,21 @@ package gdb_server_stub_pkg;
 
   // this function is called from the SoC adapter and not from the packet parser
   function automatic signal_t gdb_watchpoint_match (
-    input bit [XLEN-1:0] addr,
-    input bit            wena,  // write enable
-    input bit    [2-1:0] size
+    input retired_t ret
   );
     int status;
     signal_t tmp = dut.shd.sig;
+    SIZE_T   adr =       ret.lsu.adr;
+    bit      wen = $size(ret.lsu.val) > 0;
 
     // match hardware breakpoint
-    if (points.exists(addr)) begin
-      if (((points[addr].ptype == watch ) && wena == 1'b1) ||
-          ((points[addr].ptype == rwatch) && wena == 1'b0) ||
-          ((points[addr].ptype == awatch) )) begin
+    if (points.exists(adr)) begin
+      if (((points[adr].ptype == watch ) && wen == 1'b1) ||
+          ((points[adr].ptype == rwatch) && wen == 1'b0) ||
+          ((points[adr].ptype == awatch) )) begin
         // TODO: check is transfer size matches
         tmp = SIGTRAP;
-        $display("DEBUG: Triggered HW watchpoint at address %h.", addr);
+        $display("DEBUG: Triggered HW watchpoint at address %h.", adr);
         status = gdb_stop_reply(tmp);
       end
     end
@@ -973,15 +966,16 @@ package gdb_server_stub_pkg;
 function automatic int shadow_old (
   int unsigned idx
 );
+  bit [XLEN-1:0] adr;
   // PC
   dut.shd.pc = dut.run[idx].ifu.adr;
   // GPR remember the old value and apply the new one
-  for (int unsigned i=0; i<$size(dut.run[idx].gpr); i++) begin: gpr
+  for (int unsigned i=0; i<dut.run[idx].gpr.size(); i++) begin: gpr
     dut.run[idx].gpr[i].old = dut.shd.gpr[dut.run[idx].gpr[i].idx];
   end: gpr
   // memory
-  bit [XLEN-1:0] adr = dut.run[idx].lsu.adr;
-  for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: blk
+  adr = dut.run[idx].lsu.adr;
+  for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: map
     if ((adr >= MMAP[blk].base) &&
         (adr <  MMAP[blk].base + MMAP[blk].size)) begin: mem
       int unsigned size = $size(dut.run[idx].lsu.val);
@@ -990,26 +984,27 @@ function automatic int shadow_old (
         dut.run[idx].lsu.old[i] = dut.shd.mem[adr - MMAP[blk].base];
       end: byt
     end: mem
-  end: blk
+  end: map
 endfunction: shadow_old
 
 function automatic int shadow_apply (
   int unsigned idx
 );
+  bit [XLEN-1:0] adr;
   // PC
   dut.shd.pc = dut.run[idx].ifu.adr;
   // GPR remember the old value and apply the new one
-  for (int unsigned i=0; i<$size(dut.run[idx].gpr); i++) begin: gpr
+  for (int unsigned i=0; i<dut.run[idx].gpr.size(); i++) begin: gpr
     bit [5-1:0] r = dut.run[idx].gpr[i].idx;
     dut.shd.gpr[dut.run[idx].gpr[i].idx] = dut.run[idx].gpr[i].val;
   end: gpr
   // CSR remember the read value and apply wtitten value
-  for (int unsigned i=0; i<$size(dut.run[idx].csr); i++) begin: csr
+  for (int unsigned i=0; i<dut.run[idx].csr.size(); i++) begin: csr
     dut.shd.csr[dut.run[idx].csr[i].idx] = dut.run[idx].csr[i].wdt;
   end: csr
   // memory
-  bit [XLEN-1:0] adr = dut.run[idx].lsu.adr;
-  for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: blk
+  adr = dut.run[idx].lsu.adr;
+  for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: map
     if ((adr >= MMAP[blk].base) &&
         (adr <  MMAP[blk].base + MMAP[blk].size)) begin: mem
       int unsigned size = $size(dut.run[idx].lsu.val);
@@ -1017,7 +1012,7 @@ function automatic int shadow_apply (
         dut.shd.mem[adr - MMAP[blk].base] = dut.run[idx].lsu.val[i];
       end: byt
     end: mem
-  end: blk
+  end: map
   // increment position counter
   dut.cnt++;
 endfunction: shadow_apply
@@ -1025,19 +1020,20 @@ endfunction: shadow_apply
 function automatic int shadow_revert (
   int unsigned idx
 );
+  bit [XLEN-1:0] adr;
   // PC
   dut.shd.pc = dut.run[idx-1].ifu.adr;
   // GPR remember the old value and apply the new one
-  for (int unsigned i=0; i<$size(dut.run[idx].gpr); i++) begin: gpr
+  for (int unsigned i=0; i<dut.run[idx].gpr.size(); i++) begin: gpr
     dut.shd.gpr[dut.run[idx].gpr[i].idx] = dut.run[idx].gpr[i].old;
   end: gpr
   // CSR remember the read value and apply wtitten value
-  for (int unsigned i=0; i<$size(dut.run[idx].csr); i++) begin: csr
+  for (int unsigned i=0; i<dut.run[idx].csr.size(); i++) begin: csr
     dut.shd.csr[dut.run[idx].csr[i].idx] = dut.run[idx].csr[i].rdt;
   end: csr
   // memory
-  bit [XLEN-1:0] adr = dut.run[idx].lsu.adr;
-  for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: blk
+  adr = dut.run[idx].lsu.adr;
+  for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: map
     if ((adr >= MMAP[blk].base) &&
         (adr <  MMAP[blk].base + MMAP[blk].size)) begin: mem
       int unsigned size = $size(dut.run[idx].lsu.val);
@@ -1045,7 +1041,7 @@ function automatic int shadow_revert (
         dut.shd.mem[adr - MMAP[blk].base] = dut.run[idx].lsu.old[i];
       end: byt
     end: mem
-  end: blk
+  end: map
   // decrement position counter
   dut.cnt--;
 endfunction: shadow_revert
@@ -1054,13 +1050,36 @@ endfunction: shadow_revert
 // GDB step/continue
 ///////////////////////////////////////////////////////////////////////////////
 
-  task automatic gdb_step;
+  task gdb_forward;
+    int       status;
+    retired_t ret;
+
+    // record
+    if (dut.cnt == dut.run.size()) begin
+      // perform DUT step
+      status = shadow_old  (dut.cnt);
+      status = shadow_apply(dut.cnt);
+      dut_step(ret);
+      dut.run.push_back(ret);
+    end
+    // replay
+    else begin
+      ret = dut.run[dut.cnt];
+      status = shadow_apply(dut.cnt);
+    end
+
+    // breakpoint/watchpoint
+    // TODO: pass the event to the response
+    dut.shd.sig = gdb_breakpoint_match(ret);
+    dut.shd.sig = gdb_watchpoint_match(ret);
+  endtask: gdb_forward
+
+  task gdb_step;
     int       status;
     string    pkt;
     SIZE_T    addr;
     int       sig;
     bit       jmp;
-    retired_t ret;
 
     // read packet
     status = gdb_get_packet(pkt);
@@ -1079,28 +1098,17 @@ endfunction: shadow_revert
     endcase
 
     // TODO handle PC write errors
-    //void'(dut_jump(addr));
+    dut_jump(addr);
 
-    // record
-    if (dut.cnt == dut.run.size()) begin
-      // perform DUT step
-      shadow_old  (dut.cnt);
-      shadow_apply(dut.cnt);
-      dut_step(ret);
-      dut.run.push_back(ret);
-    end
-    // replay
-    else begin
-      shadow_apply(dut.cnt);
-    end
+    // step forward
+    gdb_forward;
 
-    // breakpoint/watchpoint
     // response packet
-    // TODO
-
+    status = gdb_stop_reply(dut.shd.sig);
   endtask: gdb_step
 
-  task automatic gdb_continue ();
+  task gdb_continue ();
+    byte ch [] = new[1];
     int status;
     string pkt;
     SIZE_T addr;
@@ -1114,12 +1122,8 @@ endfunction: shadow_revert
     case (pkt[0])
       "c": begin
         status = $sscanf(pkt, "c%h", addr);
-        dut.shd.sig = CONTINUE;
+        dut.shd.sig = SIGNONE;
         jmp = (status == 1);
-        if (status == 1) begin
-          // TODO handle PC write errors
-          void'(dut_jump(addr));
-        end
       end
       "C": begin
         status = $sscanf(pkt, "C%h;%h", sig, addr);
@@ -1129,9 +1133,30 @@ endfunction: shadow_revert
     endcase
 
     // TODO handle PC write errors
-    //void'(dut_jump(addr));
+    dut_jump(addr);
 
-    $display("DBG: points: %p", points);
+    // step forward
+    do begin
+      gdb_forward;
+
+      status = socket_recv(ch, MSG_PEEK | MSG_DONTWAIT);
+
+      // if empty, check for breakpoints/watchpoints and continue
+      if (status != 1) begin
+        // do nothing
+      end
+      // in case of Ctrl+C (character 0x03)
+      else if (ch[0] == SIGQUIT) begin
+        dut.shd.sig = SIGINT;
+        $display("DEBUG: Interrupt SIGQUIT (0x03) (Ctrl+c).");
+        // send response
+        status = gdb_stop_reply(dut.shd.sig);
+      end
+      // parse packet and loop back
+      else begin
+        gdb_packet(ch);
+      end
+    end while (dut.shd.sig == SIGNONE);
 
   endtask: gdb_continue
 
@@ -1155,19 +1180,18 @@ endfunction: shadow_revert
     return(0);
   endfunction: gdb_extended
 
-  function automatic int gdb_reset ();
+  task gdb_reset ();
     int status;
     string pkt;
 
     // read packet
     status = gdb_get_packet(pkt);
 
-    // enter RESET state
-    state = RESET;
+    // perform RESET sequence
+    dut_reset();
 
     // do not send packet response here
-    return(0);
-  endfunction: gdb_reset
+  endtask: gdb_reset
 
   function automatic int gdb_detach ();
     int status;
@@ -1183,7 +1207,7 @@ endfunction: shadow_revert
     stub_state = STUB_STATE_INIT;
 
     // stop HDL simulation, so the HDL simulator can render waveforms
-    $info("GDB: detached, stopping simulation from within state %s.", state.name);
+    $info("GDB: detached, stopping simulation from within state %s.", dut.shd.sig.name);
     $stop();
     // after user continues HDL simulation blocking wait for GDB client to reconnect
     $info("GDB: continuing stopped simulation, waiting for GDB to reconnect to.");
@@ -1236,15 +1260,16 @@ endfunction: shadow_revert
         "s",
         "S":          gdb_step();
         "c",
-        "C": status = gdb_continue();
+        "C":          gdb_continue();
         "?": status = gdb_signal();
         "Q",
-        "q": status = gdb_query_packet();
+        "q":          gdb_query_packet();
+//        "q": status = gdb_query_packet();
         "v":          gdb_verbose_packet();
         "z": status = gdb_point_remove();
         "Z": status = gdb_point_insert();
         "!": status = gdb_extended();
-        "R": status = gdb_reset();
+        "R":          gdb_reset();
         "D": status = gdb_detach();
         "k": status = gdb_kill();
         default: begin
@@ -1266,10 +1291,17 @@ endfunction: shadow_revert
 ///////////////////////////////////////////////////////////////////////////////
 
     task gdb_fsm ();
+      static byte ch [] = new[1];
+      int status;
 
-
+      forever begin
+        // blocking socket read
+        status = socket_recv(ch, MSG_PEEK);
+        // parse packet and loop back
+        gdb_packet(ch);
+      end
     endtask: gdb_fsm
 
-  endclass:gdb_server_stub_socket
+  endclass: gdb_server_stub
 
 endpackage: gdb_server_stub_pkg
