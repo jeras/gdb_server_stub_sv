@@ -1128,6 +1128,9 @@ endfunction: shadow_revert
       end
     endcase
 
+    // TODO handle PC write errors
+    //void'(dut_jump(addr));
+
     $display("DBG: points: %p", points);
 
   endtask: gdb_continue
