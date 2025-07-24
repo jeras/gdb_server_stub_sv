@@ -222,8 +222,12 @@ qemu-system-arm -M versatilepb -m 128M -nographic -kernel uart01/notmain.bin -ic
 ```
 
 ```sh
-qemu-system-arm -M versatilepb -m 128M -nographic -kernel uart01/notmain.bin -S
+qemu-system-arm -M versatilepb -m 128M -nographic -kernel uart01/notmain.bin -s -S
 ```
+
+=== Debugging Zephyr on ARM QEMU
+
+https://dojofive.com/blog/using-the-qemu-emulator-with-zephyr-builds-and-vscode/
 
 == References
 
@@ -249,6 +253,7 @@ More notes on record/replay functionality in GDB:
 * link:https://sourceware.org/gdb/current/onlinedocs/gdb.html/Process-Record-and-Replay.html[GDB: Recording Inferior’s Execution and Replaying It],
 * link:https://sourceware.org/gdb/current/onlinedocs/gdb.html/Reverse-Execution.html[GDB: Running programs backward],
 * link:https://developers.redhat.com/articles/2024/08/08/using-gdb-time-travel[Guinevere Larsen: Using GDB to time travel],
+* link:https://developers.redhat.com/articles/2025/06/04/advanced-time-manipulation-gdb[Guinevere Larsen: Advanced time manipulation with GDB],
 * FOSDEM 2024: Guinevere Larsen: Manipulating time with GDB
   (link:https://archive.fosdem.org/2024/events/attachments/fosdem-2024-1857-help-us-improve-time-manipulation-with-gdb/slides/22342/FOSDEM_2024_-_Reverse_debugging_t96IjEg.pdf[slides],
    link:https://archive.fosdem.org/2024/schedule/event/fosdem-2024-1857-help-us-improve-time-manipulation-with-gdb/[video])

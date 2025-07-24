@@ -8,8 +8,8 @@
 
 module nerv_tb #(
   // constants used across the design in signal range sizing instead of literals
-  localparam int unsigned XLEN = 32,
-  parameter  int unsigned GNUM = 32,
+  localparam int unsigned XLEN = 32,  // register/address/data width
+  parameter  int unsigned GNUM = 32,  // GPR number
   // Unix/TCP socket
   parameter  string       SOCKET
 );

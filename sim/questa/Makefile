@@ -40,6 +40,7 @@ DEF = -defineall TOOL_QUESTA
 
 DEF += -defineall STALL
 DEF += -defineall NERV_DBGREGS
+DEF += -defineall NERV_RVFI
 
 ################################################################################
 # Verilog toplevel parameter override
