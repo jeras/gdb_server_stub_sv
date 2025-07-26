@@ -111,32 +111,40 @@ package gdb_server_stub_pkg;
       array_t          mem [0:MEMN-1];  // array of memory regions
     } shadow_t;
 
+    // instruction fetch unit
+    typedef struct {
+      bit [XLEN-1:0] adr;  // instruction address
+      bit [ILEN-1:0] ins;  // instruction
+      bit            ill;  // illegal instruction
+    } retired_ifu_t;
+
+    // GPRs (NOTE: 4-state values)
+    typedef struct {
+      bit      [5-1:0] idx;  // GPR index
+      logic [XLEN-1:0] old;  // old value
+      logic [XLEN-1:0] val;  // new value
+    } retired_gpr_t;
+
+    // CSRs (NOTE: 2-state values)
+    typedef struct {
+      bit     [12-1:0] idx;  //
+      bit   [XLEN-1:0] rdt;  // old value
+      bit   [XLEN-1:0] wdt;  // new value after write
+    } retired_csr_t;
+
+    // memory (access size is encoded in array size)
+    typedef struct {
+      bit   [XLEN-1:0] adr;     // data address
+      array_t          old [];  // read  data (old data)
+      array_t          val [];  // write data (new data)
+    } retired_lsu_t;
+
     // instruction retirement history log entry
     typedef struct {
-      // instruction fetch unit
-      struct {
-        bit [XLEN-1:0] adr;  // instruction address
-        bit [ILEN-1:0] ins;  // instruction
-        bit            ill;  // illegal instruction
-      } ifu;
-      // GPRs (NOTE: 4-state values)
-      struct {
-        bit      [5-1:0] idx;  // GPR index
-        logic [XLEN-1:0] old;  // old value
-        logic [XLEN-1:0] val;  // new value
-      } gpr [];
-      // CSRs (NOTE: 2-state values)
-      struct {
-        bit     [12-1:0] idx;  //
-        bit   [XLEN-1:0] rdt;  // old value
-        bit   [XLEN-1:0] wdt;  // new value after write
-      } csr [];
-      // memory (access size is encoded in array size)
-      struct {
-        bit   [XLEN-1:0] adr;     // data address
-        array_t          old [];  // read  data (old data)
-        array_t          val [];  // write data (new data)
-      } lsu;
+      retired_ifu_t ifu;
+      retired_gpr_t gpr [];
+      retired_csr_t csr [];
+      retired_lsu_t lsu;
     } retired_t;
 
     // DUT simulation state
@@ -167,8 +175,9 @@ package gdb_server_stub_pkg;
       end else begin
         $info("Connected to '%0s'.", socket);
       end
-      // accept connection from GDB
-      void'(socket_accept);
+
+      // accept connection from GDB (blocking)
+      status = socket_accept();
 
       // DUT shadow state initialization
       // signal
@@ -713,6 +722,8 @@ package gdb_server_stub_pkg;
 
     // read packet
     status = gdb_get_packet(pkt);
+
+    $display("DBG: REGN = %d", REGN);
 
     pkt = "";
     for (int unsigned i=0; i<REGN; i++) begin

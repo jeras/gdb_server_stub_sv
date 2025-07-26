@@ -55,6 +55,7 @@ int socket_listen(const char* name) {
   // bind socket file descriptor to socket
   if (bind(sfd, (struct sockaddr *) &server, sizeof(struct sockaddr_un)) == -1) {
     printf("DPI-C: Bind failed with errno = %0d.\n", errno);
+    perror("socket");
     return -1;
   }
 
@@ -72,7 +73,13 @@ int socket_listen(const char* name) {
 int socket_accept () {
   printf("DPI-C: Waiting for client to connect...\n");
   cfd = accept(sfd, NULL, NULL);
-  printf("DPI-C: Accepted client connection fd = %d\n", cfd);
+  if (cfd < 0) {
+    printf("DPI-C: Server accept failed with errno = %d.\n", errno);
+    perror("socket");
+    exit(0);
+  } else {
+    printf("DPI-C: Accepted client connection fd = %d\n", cfd);
+  }
 
   // return client fd
   return cfd;
