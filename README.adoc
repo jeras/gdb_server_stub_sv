@@ -150,13 +150,15 @@ Microsoft provides a document describing how a
 link:https://code.visualstudio.com/api/extension-guides/debugger-extension[debugger extension]
 implementing a debugger adapter (DA) connects VScode and a debugger.
 
-*VSCode* <-_DAP_-> *DA* <- _GDB/MI_ -> *GDB/LLVM*
+*VSCode* <-_DAP_-> *DA* <- _GDB/MI_ -> *GDB*/*LLVM* <- _RSP_ -> *QEMU*/*HDL*
 
 VSCode using the the link:https://microsoft.github.io/debug-adapter-protocol/[debug adapter protocol (DAP)]
 communicates with the link:https://github.com/Microsoft/vscode-cpptools[debug adapter (DA)]
 (with link:https://github.com/microsoft/vscode-debugadapter-node[VS Code Debug Protocol and Debug Adapter])
 which uses the link:https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI.html[GDB machine interface (GDB/MI) protocol]
 to communicate with GDB/LLVM.
+Further GDB/LLVM communicate with stub in a simulator like QEMU and the one in this project using
+link:https://sourceware.org/gdb/current/onlinedocs/gdb.html/Remote-Protocol.html[RSP] (GDB Remote Serial Protocol).
 
 During link:https://microsoft.github.io/debug-adapter-protocol/overview[*Launch Sequencing*]
 the debug adapter should ask the debugger GDB/LLVM about capabilities/features.
@@ -170,7 +172,27 @@ link:https://microsoft.github.io/debug-adapter-protocol/specification#Requests_R
 are available if the
 link:https://microsoft.github.io/debug-adapter-protocol/specification#Types_Capabilities[`supportsStepBack`] capability is `true`.
 
-Related capabilities are:
+The *DA* connects to GDB using GDB/MI (machine interface).
+The DA should ask GDB the link:https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Support-Commands.html[`-list-target-features`]
+question and get `reverse` in the response.
+
+There are a few issues in the link:https://github.com/Microsoft/vscode-cpptools[DA repository]
+related to record/replay, reverse execution and GDB/MI `-list-target-features` command.
+
+GDB would further communicate with a stub using GDB packets.
+The stub should respond to the `qSupported` packet with `ReverseStep+;ReverseContinue+;`.
+
+=== QEMU
+
+In a link:https://github.com/jeras/zephyr-qemu-test-app[separate project]
+I attempt to enable record/replay in QEMU (for ARM) and run a Zephyr APP
+to see if I can get the full VSCode integration working.
+I could not, but I at least checked the QEMU stub response to the `qSupported` RSP packet.
+QEMU provides the expected response.
+
+I can use the same setup to check the GDB/MI protocol using a Python implementation of GDB/MI.
+
+=== Related capabilities
 
 * link:https://microsoft.github.io/debug-adapter-protocol/specification#Types_Capabilities[`supportsSteppingGranularity`]
   since requests
@@ -189,6 +211,8 @@ Related capabilities are:
   is required for availability of request
   link:https://microsoft.github.io/debug-adapter-protocol/specification#Requests_Disassemble[`Disassemble`].
 
+* In my tests only inserting write watchpoints was an option from a VSCode dropdown menu,
+  I would like to see read and access options in the same menu.
 
 == QEMU ARM record/replay demo with VSCode
 
@@ -236,6 +260,18 @@ Additional `maintenance` commands can be found here (useful for RESET functional
 https://sourceware.org/gdb/current/onlinedocs/gdb.html/Maintenance-Commands.html
 
 https://medium.com/@tatsuo.nomura/implement-gdb-remote-debug-protocol-stub-from-scratch-2-5e3025f0e987
+
+=== Issue reports
+
+Mirosoft C/C++ DAP adapter:
+
+GDB:
+
+QEMU:
+
+* link:https://gitlab.com/qemu-project/qemu/-/issues/3051[Time travel debugging and integration with VSCode DAP adapter]
+
+Verilator:
 
 === Various stub implementations
 
