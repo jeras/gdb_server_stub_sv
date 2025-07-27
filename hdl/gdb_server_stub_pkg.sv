@@ -75,12 +75,16 @@ package gdb_server_stub_pkg;
       bit debug_log;    // debug log mode
       bit acknowledge;  // acknowledge mode
       bit extended;     // extended remote mode
+      bit register;     // read registers from (0-shadow, 1-DUT)
+      bit memory;       // read memory from (0-shadow, 1-DUT)
     } stub_state_t;
 
     localparam stub_state_t STUB_STATE_INIT = '{
       debug_log: DEBUG_LOG,
       acknowledge: 1'b1,
-      extended: 1'b0
+      extended: 1'b0,
+      register: 1'b0,
+      memory: 1'b0
     };
 
     // initialize stub state
@@ -99,6 +103,10 @@ package gdb_server_stub_pkg;
       "QStartNoAckMode": "-"   // TODO: test it
     };
 
+///////////////////////////////////////////////////////////////////////////////
+// shadow copy state
+///////////////////////////////////////////////////////////////////////////////
+
     // DUT shadow state
     typedef struct {
       // signal
@@ -110,6 +118,10 @@ package gdb_server_stub_pkg;
       // memories
       array_t          mem [0:MEMN-1];  // array of memory regions
     } shadow_t;
+
+///////////////////////////////////////////////////////////////////////////////
+// retired instruction trace
+///////////////////////////////////////////////////////////////////////////////
 
     // instruction fetch unit
     typedef struct {
@@ -134,9 +146,9 @@ package gdb_server_stub_pkg;
 
     // memory (access size is encoded in array size)
     typedef struct {
-      bit   [XLEN-1:0] adr;     // data address
-      array_t          old [];  // read  data (old data)
-      array_t          val [];  // write data (new data)
+      bit   [XLEN-1:0] adr;  // data address
+      array_t          old;  // read  data (old data)
+      array_t          val;  // write data (new data)
     } retired_lsu_t;
 
     // instruction retirement history log entry
@@ -157,12 +169,50 @@ package gdb_server_stub_pkg;
     dut_state_t dut;
 
 ///////////////////////////////////////////////////////////////////////////////
+// shadow copy functions
+///////////////////////////////////////////////////////////////////////////////
+
+    // write register to shadow copy
+    function void shd_reg_write (
+      input bit    [5-1:0] idx,
+      input bit [XLEN-1:0] val
+    );
+      if (idx < GPRN) begin
+        dut.shd.gpr[idx] = val;
+      end else
+      if (idx == GPRN) begin
+        dut.shd.pc = val;
+      end else
+      if (idx > GPRN) begin
+        dut.shd.csr[idx-1-GPRN] = val;
+      end
+    endfunction: shd_reg_write
+
+    // read register from shadow copy
+    function logic [XLEN-1:0] shd_reg_read (
+      input bit    [5-1:0] idx
+    );
+      if (idx < GPRN) begin
+        return(dut.shd.gpr[idx]);
+      end else
+      if (idx == GPRN) begin
+        return(dut.shd.pc);
+      end else
+      if (idx > GPRN) begin
+        return(dut.shd.csr[idx-1-GPRN]);
+      end else
+      begin
+        return('x);
+      end
+    endfunction: shd_reg_read
+
+///////////////////////////////////////////////////////////////////////////////
 // constructor
 ///////////////////////////////////////////////////////////////////////////////
 
     // constructor
     function new (
-      string socket = ""
+      input string socket = ""
     );
       int status;
 
@@ -441,7 +491,10 @@ package gdb_server_stub_pkg;
     case (str)
       "help": begin
         status = gdb_query_monitor_reply({"HELP: Available monitor commands:\n",
-                                          "* set debug on/off.\n"});
+                                          "* 'set debug on/off',\n",
+                                          "* 'set register=dut/shadow' (reading registers from dut/shadow, default is shadow),\n",
+                                          "* 'set memory=dut/shadow' (reading memories from dut/shadow, default is shadow),\n",
+                                          "* 'reset'."});
       end
       "set debug on": begin
         stub_state.debug_log = 1'b1;
@@ -451,10 +504,28 @@ package gdb_server_stub_pkg;
         stub_state.debug_log = 1'b0;
         status = gdb_query_monitor_reply("Disabled debug logging.\n");
       end
+      "set register=dut": begin
+        stub_state.register = 1'b1;
+        status = gdb_query_monitor_reply("Reading registers directly from DUT.\n");
+      end
+      "set register=shadow": begin
+        stub_state.register = 1'b0;
+        status = gdb_query_monitor_reply("Reading registers from shadow copy.\n");
+      end
+      "set memory=dut": begin
+        stub_state.memory = 1'b1;
+        status = gdb_query_monitor_reply("Reading memory directly from DUT.\n");
+      end
+      "set memory=shadow": begin
+        stub_state.memory = 1'b0;
+        status = gdb_query_monitor_reply("Reading memory from shadow copy.\n");
+      end
       "reset": begin
         dut_reset;
+        status = gdb_query_monitor_reply("Performed a reset cycle on DUT.\n");
       end
       default begin
+        status = gdb_query_monitor_reply("'monitor' command was not recognized.\n");
       end
     endcase
   endtask: gdb_query_monitor
@@ -560,6 +631,7 @@ package gdb_server_stub_pkg;
     int status;
     SIZE_T adr;
     SIZE_T len;
+    byte val;
 
     // read packet
     status = gdb_get_packet(pkt);
@@ -582,7 +654,12 @@ package gdb_server_stub_pkg;
     pkt = {len{"XX"}};
     for (SIZE_T i=0; i<len; i++) begin
       string tmp = "XX";
-      tmp = $sformatf("%02h", dut_mem_read(adr+i));
+      if (stub_state.memory) begin
+        val = dut_mem_read(adr+i);
+      end else begin
+        val = shd_mem_read(adr+i, 1)[0];
+      end
+      tmp = $sformatf("%02h", val);
       pkt[i*2+0] = tmp[0];
       pkt[i*2+1] = tmp[1];
     end
@@ -633,7 +710,9 @@ package gdb_server_stub_pkg;
 `endif
 //      $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, dut_mem_read(adr+i));
       // TODO handle memory access errors
-      void'(dut_mem_write(adr+i, dat));
+      // NOTE: memory writes are always done to both DUT and shadow
+      void'(dut_mem_write(adr+i,            dat  ));
+      void'(shd_mem_write(adr+i, array_t'('{dat})));
     end
 
     // send response
@@ -669,7 +748,11 @@ package gdb_server_stub_pkg;
     // read memory
     pkt = {len{8'h00}};
     for (SIZE_T i=0; i<len; i++) begin
-      pkt[i] = dut_mem_read(adr+i);
+      if (stub_state.memory) begin
+        pkt[i] = dut_mem_read(adr+i);
+      end else begin
+        pkt[i] = shd_mem_read(adr+i, 1)[0];
+      end
     end
 
     // send response
@@ -701,7 +784,9 @@ package gdb_server_stub_pkg;
     // write memory
     for (SIZE_T i=0; i<len; i++) begin
       // TODO handle memory access errors
-      void'(dut_mem_write(adr+i, pkt[code+i]));
+      // NOTE: memory writes are always done to both DUT and shadow
+      void'(dut_mem_write(adr+i,            pkt[code+i]  ));
+      void'(shd_mem_write(adr+i, array_t'('{pkt[code+i]})));
     end
 
     // send response
@@ -718,7 +803,7 @@ package gdb_server_stub_pkg;
   function automatic int gdb_reg_readall ();
     int status;
     string pkt;
-    bit [XLEN-1:0] val;  // 2-state so GDB does not misinterpret 'x
+    logic [XLEN-1:0] val;  // 4-state so GDB can iterpret 'x
 
     // read packet
     status = gdb_get_packet(pkt);
@@ -728,7 +813,11 @@ package gdb_server_stub_pkg;
     pkt = "";
     for (int unsigned i=0; i<REGN; i++) begin
       // swap byte order since they are sent LSB first
-      val = {<<8{dut_reg_read(i)}};
+      if (stub_state.register) begin
+        val = {<<8{dut_reg_read(i)}};
+      end else begin
+        val = {<<8{shd_reg_read(i)}};
+      end
       case (XLEN)
         32: pkt = {pkt, $sformatf("%08h", val)};
         64: pkt = {pkt, $sformatf("%016h", val)};
@@ -763,7 +852,9 @@ package gdb_server_stub_pkg;
       endcase
 `endif
       // swap byte order since they are sent LSB first
+      // NOTE: register writes are always done to both DUT and shadow
       dut_reg_write(i, {<<8{val}});
+      shd_reg_write(i, {<<8{val}});
     end
 
     // send response
@@ -780,7 +871,7 @@ package gdb_server_stub_pkg;
     int status;
     string pkt;
     int unsigned idx;
-    bit [XLEN-1:0] val;  // 2-state so GDB does not misinterpret 'x
+    logic [XLEN-1:0] val;  // 4-state so GDB can iterpret 'x
 
     // read packet
     status = gdb_get_packet(pkt);
@@ -789,7 +880,11 @@ package gdb_server_stub_pkg;
     status = $sscanf(pkt, "p%h", idx);
 
     // swap byte order since they are sent LSB first
-    val = {<<8{dut_reg_read(idx)}};
+    if (stub_state.register) begin
+      val = {<<8{dut_reg_read(idx)}};
+    end else begin
+      val = {<<8{shd_reg_read(idx)}};
+    end
     case (XLEN)
       32: pkt = {pkt, $sformatf("%08h", val)};
       64: pkt = {pkt, $sformatf("%016h", val)};
@@ -821,7 +916,9 @@ package gdb_server_stub_pkg;
 `endif
 
     // swap byte order since they are sent LSB first
+    // NOTE: register writes are always done to both DUT and shadow
     dut_reg_write(idx, {<<8{val}});
+    shd_reg_write(idx, {<<8{val}});
 //    case (XLEN)
 //      32: $display("DEBUG: GPR[%0d] <= 32'h%08h", idx, val);
 //      64: $display("DEBUG: GPR[%0d] <= 64'h%016h", idx, val);
@@ -974,88 +1071,89 @@ package gdb_server_stub_pkg;
 // applying /reverting retired instruction to/from DUT shadow state
 ///////////////////////////////////////////////////////////////////////////////
 
-function automatic int shadow_old (
-  int unsigned idx
-);
-  bit [XLEN-1:0] adr;
-  // PC
-  dut.shd.pc = dut.run[idx].ifu.adr;
-  // GPR remember the old value and apply the new one
-  for (int unsigned i=0; i<dut.run[idx].gpr.size(); i++) begin: gpr
-    dut.run[idx].gpr[i].old = dut.shd.gpr[dut.run[idx].gpr[i].idx];
-  end: gpr
-  // memory
-  adr = dut.run[idx].lsu.adr;
-  for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: map
-    if ((adr >= MMAP[blk].base) &&
-        (adr <  MMAP[blk].base + MMAP[blk].size)) begin: mem
-      int unsigned size = $size(dut.run[idx].lsu.val);
-      dut.run[idx].lsu.old = new[size];
-      for (int unsigned i=0; i<size; i++) begin: byt
-        dut.run[idx].lsu.old[i] = dut.shd.mem[adr - MMAP[blk].base];
-      end: byt
-    end: mem
-  end: map
-endfunction: shadow_old
+    // read from shadow memory
+    function automatic array_t shd_mem_read (
+      SIZE_T adr,
+      SIZE_T siz
+    );
+      array_t tmp = new[siz];
+      for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: map
+        if ((adr >= MMAP[blk].base) &&
+            (adr <  MMAP[blk].base + MMAP[blk].size)) begin: mem
+          for (int unsigned i=0; i<siz; i++) begin: byt
+            tmp[i] = dut.shd.mem[blk][adr - MMAP[blk].base];
+          end: byt
+        end: mem
+      end: map
+    endfunction: shd_mem_read
 
-function automatic int shadow_apply (
-  int unsigned idx
-);
-  bit [XLEN-1:0] adr;
-  // PC
-  dut.shd.pc = dut.run[idx].ifu.adr;
-  // GPR remember the old value and apply the new one
-  for (int unsigned i=0; i<dut.run[idx].gpr.size(); i++) begin: gpr
-    bit [5-1:0] r = dut.run[idx].gpr[i].idx;
-    dut.shd.gpr[dut.run[idx].gpr[i].idx] = dut.run[idx].gpr[i].val;
-  end: gpr
-  // CSR remember the read value and apply wtitten value
-  for (int unsigned i=0; i<dut.run[idx].csr.size(); i++) begin: csr
-    dut.shd.csr[dut.run[idx].csr[i].idx] = dut.run[idx].csr[i].wdt;
-  end: csr
-  // memory
-  adr = dut.run[idx].lsu.adr;
-  for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: map
-    if ((adr >= MMAP[blk].base) &&
-        (adr <  MMAP[blk].base + MMAP[blk].size)) begin: mem
-      int unsigned size = $size(dut.run[idx].lsu.val);
-      for (int unsigned i=0; i<size; i++) begin: byt
-        dut.shd.mem[adr - MMAP[blk].base] = dut.run[idx].lsu.val[i];
-      end: byt
-    end: mem
-  end: map
-  // increment position counter
-  dut.cnt++;
-endfunction: shadow_apply
+    // write to shadow memory
+    function automatic void shd_mem_write (
+      SIZE_T  adr,
+      array_t dat
+    );
+      SIZE_T siz = dat.size();
+      for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: map
+        if ((adr >= MMAP[blk].base) &&
+            (adr <  MMAP[blk].base + MMAP[blk].size)) begin: mem
+          for (int unsigned i=0; i<siz; i++) begin: byt
+            dut.shd.mem[blk][adr - MMAP[blk].base] = dat[i];
+          end: byt
+        end: mem
+      end: map
+    endfunction: shd_mem_write
 
-function automatic int shadow_revert (
-  int unsigned idx
-);
-  bit [XLEN-1:0] adr;
-  // PC
-  dut.shd.pc = dut.run[idx-1].ifu.adr;
-  // GPR remember the old value and apply the new one
-  for (int unsigned i=0; i<dut.run[idx].gpr.size(); i++) begin: gpr
-    dut.shd.gpr[dut.run[idx].gpr[i].idx] = dut.run[idx].gpr[i].old;
-  end: gpr
-  // CSR remember the read value and apply wtitten value
-  for (int unsigned i=0; i<dut.run[idx].csr.size(); i++) begin: csr
-    dut.shd.csr[dut.run[idx].csr[i].idx] = dut.run[idx].csr[i].rdt;
-  end: csr
-  // memory
-  adr = dut.run[idx].lsu.adr;
-  for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: map
-    if ((adr >= MMAP[blk].base) &&
-        (adr <  MMAP[blk].base + MMAP[blk].size)) begin: mem
-      int unsigned size = $size(dut.run[idx].lsu.val);
-      for (int unsigned i=0; i<size; i++) begin: byt
-        dut.shd.mem[adr - MMAP[blk].base] = dut.run[idx].lsu.old[i];
-      end: byt
-    end: mem
-  end: map
-  // decrement position counter
-  dut.cnt--;
-endfunction: shadow_revert
+    function automatic int shadow_old (
+      int unsigned idx
+    );
+      // PC
+      dut.shd.pc = dut.run[idx].ifu.adr;
+      // GPR remember the old value and apply the new one
+      for (int unsigned i=0; i<dut.run[idx].gpr.size(); i++) begin: gpr
+        dut.run[idx].gpr[i].old = dut.shd.gpr[dut.run[idx].gpr[i].idx];
+      end: gpr
+      // memory
+      dut.run[idx].lsu.old = shd_mem_read(dut.run[idx].lsu.adr, $size(dut.run[idx].lsu.val));
+    endfunction: shadow_old
+
+    function automatic int shadow_apply (
+      int unsigned idx
+    );
+      // PC
+      dut.shd.pc = dut.run[idx].ifu.adr;
+      // GPR remember the old value and apply the new one
+      for (int unsigned i=0; i<dut.run[idx].gpr.size(); i++) begin: gpr
+        bit [5-1:0] r = dut.run[idx].gpr[i].idx;
+        dut.shd.gpr[dut.run[idx].gpr[i].idx] = dut.run[idx].gpr[i].val;
+      end: gpr
+      // CSR remember the read value and apply wtitten value
+      for (int unsigned i=0; i<dut.run[idx].csr.size(); i++) begin: csr
+        dut.shd.csr[dut.run[idx].csr[i].idx] = dut.run[idx].csr[i].wdt;
+      end: csr
+      // memory
+      shd_mem_write(dut.run[idx].lsu.adr, dut.run[idx].lsu.val);
+      // increment position counter
+      dut.cnt++;
+    endfunction: shadow_apply
+
+    function automatic int shadow_revert (
+      int unsigned idx
+    );
+      // PC
+      dut.shd.pc = dut.run[idx-1].ifu.adr;
+      // GPR remember the old value and apply the new one
+      for (int unsigned i=0; i<dut.run[idx].gpr.size(); i++) begin: gpr
+        dut.shd.gpr[dut.run[idx].gpr[i].idx] = dut.run[idx].gpr[i].old;
+      end: gpr
+      // CSR remember the read value and apply wtitten value
+      for (int unsigned i=0; i<dut.run[idx].csr.size(); i++) begin: csr
+        dut.shd.csr[dut.run[idx].csr[i].idx] = dut.run[idx].csr[i].rdt;
+      end: csr
+      // memory
+      shd_mem_write(dut.run[idx].lsu.adr, dut.run[idx].lsu.old);
+      // decrement position counter
+      dut.cnt--;
+    endfunction: shadow_revert
 
 ///////////////////////////////////////////////////////////////////////////////
 // GDB step/continue
