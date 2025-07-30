@@ -133,6 +133,160 @@ TODO (difficult):
   (full generalization requires the SystemVerilog simulator to support the `alias` keyword),
 * ...
 
+== Leaky abstraction
+
+A common debugger abstraction upon hitting a breakpoint is to execute all instructions
+up to the breakpoint address, but not the instruction on that address itself.
+While I was unable to find a strong statement defining this abstraction,
+it is evident from how software breakpoints work.
+The instruction at the breakpoint address is replaced by a BREAK instruction.
+It is similar for watchpoints, but those do not have a comparable software implementation.
+
+While this abstraction makes sense with a common hardware debug interface,
+it is not the obvious approach for an entirely passive monitor of cycle accurate CPU execution.
+While a hardware debugger can enforce a state where all instructions up to the breakpoint
+have been executed and no instructions from the breakpoint on have started execution,
+a passive monitor is unable to modify the CPU state,
+so instructions before at and after the breakpoint can be in various stages of the execution pipeline.
+Additionally, pipelined, super-scalar and OoO CPU architectures perform some sort of speculative execution.
+In the simplest form, a pipelined CPU starts speculatively executing a branch,
+but flushes the pipeline, if the branch was mis-predicted.
+
+Therefore the only reliable way to implement breakpoins/watchpoins or stepping in general
+within a passive monitor, is to detect when instructions are retired.
+So a passive monitor pauses the simulation at the point where the breakpoint instruction is retired,
+but presents to the debugger the state before the changes applied by the breakpoint instruction.
+
+While this may sound complicated, it is far easier than the alternatives.
+My initial approach was to detect when the breakpoint instruction enters the instruction fetch stage,
+stop the simulation and modeling the state change caused by
+all the instructions further in the pipeline, but not yet retired.
+Such a model would basically reimplement the pipeline,
+which is only makes sense for singlecycle/multicycle implementations without a pipeline.
+
+The shadow copy state and execution trace are designed with the following principles:
+
+1. A CPU simulator can exactly reproduce the execution sequence by using the shadow state updated by the trace.
+   When the DUT and shadow states differ affecting the execution of an instruction,
+   this difference must be recorded in the trace log.
+2. When stepping back in time by reverting traced instructions, it must be possible
+   to achieve the exact same shadow state as during the forward execution.
+
+=== Stepping forward/backward
+
+Forward execution of the first 2 instructions:
+
+0. `cnt=0` (RESET)
+   * INIT: initialize the shadow copy (memories, PC, CSR) based on DUT reset values.
+   * A breakpoint or a hardcoded condition is placed at the RESET address.
+     In accordance with the breakpoint abstraction, the simulation must retire the first instruction,
+     therefore a step FORWARD is always performed after RESET.
+   * FORWARD (as part of the RESET and breakpoint at RESET sequence):
+     1. ~`shadow_apply()`~
+     2. `dut_step(ret)` (collects first retired instruction)
+     3. `push(ret)` (trace `trc[0]`)
+     4. `shadow_update(0)`
+     5. `shadow_remember(0)`
+     6. match breakpoint/watchpoint
+     7. `cnt++`
+   * ~BACKWARD~
+1. `cnt=1`
+   * FORWARD:
+     1. `shadow_apply(0)`
+     2. `dut_step(ret)` (collects second retired instruction)
+     3. `push(ret)` (trace `trc[1]`)
+     4. `shadow_update(1)`
+     5. `shadow_remember(1)`
+     6. match breakpoint/watchpoint
+     7. `cnt++`
+   * BACKWARD:
+     * responds with an error, since there is nowhere to go
+1. `cnt=2`
+   * FORWARD:
+     1. `shadow_apply(1)`
+     2. `dut_step(ret)` (collects third retired instruction)
+     3. `push(ret)` (trace `trc[2]`)
+     4. `shadow_update(2)`
+     5. `shadow_remember(2)`
+     6. match breakpoint/watchpoint
+     7. `cnt++`
+   * BACKWARD:
+     1. `shadow_remember(1)`
+     2. `cnt--`
+     3. `ret = trc[0]`
+     4. match breakpoint/watchpoint
+
+There are 3 possible step operations
+1. record (during first execution)
+2. replay (replaying )
+3. revert
+
+For the execution trace the following naming scheme makes sense:
+
+1. `cur` - current value
+2. `nxt` - next value
+
+[%autowidth]
+|===
+| operation         | store                 | load                  | AMO
+
+| `monitor_step`    | wdata  -> `trc[].nxt` | rdata  -> `trc[].cur` | wdata  -> `trc[].nxt` : rdata  -> `trc[].cur`
+| `shadow_record`   | shadow -> `trc[].cur` | `trc[].cur` -> shadow | shadow -> `trc[].cur` : `trc[].cur` -> shadow
+| `shadow_replay`   | `trc[].nxt` -> shadow |                       | `trc[].nxt` -> shadow |
+| `shadow_revert`   | `trc[].cur` -> shadow | `trc[].cur` -> shadow | `trc[].cur` -> shadow |
+|===
+
+0. `cnt=0` (RESET)
+   * INIT: initialize the shadow copy (memories, PC, CSR) based on DUT reset values.
+   * A breakpoint or a hardcoded condition is placed at the RESET address.
+     In accordance with the breakpoint abstraction, the simulation must retire the first instruction,
+     therefore a step FORWARD is always performed after RESET.
+   * FORWARD (as part of the RESET and breakpoint at RESET sequence):
+     1. ~`shadow_apply()`~
+     2. `dut_step(ret)` (collects first retired instruction)
+     3. `push(ret)` (trace `trc[0]`)
+     4. `shadow_update(0)`
+     5. `shadow_remember(0)`
+     6. match breakpoint/watchpoint
+     7. `cnt++`
+   * ~BACKWARD~
+1. `cnt=1`
+   * FORWARD:
+     1. `shadow_apply(0)`
+     2. `dut_step(ret)` (collects second retired instruction)
+     3. `push(ret)` (trace `trc[1]`)
+     4. `shadow_update(1)`
+     5. `shadow_remember(1)`
+     6. match breakpoint/watchpoint
+     7. `cnt++`
+   * BACKWARD:
+     * responds with an error, since there is nowhere to go
+1. `cnt=2`
+   * FORWARD:
+     1. `shadow_apply(1)`
+     2. `dut_step(ret)` (collects third retired instruction)
+     3. `push(ret)` (trace `trc[2]`)
+     4. `shadow_update(2)`
+     5. `shadow_remember(2)`
+     6. match breakpoint/watchpoint
+     7. `cnt++`
+   * BACKWARD:
+     1. `shadow_remember(1)`
+     2. `cnt--`
+     3. `ret = trc[0]`
+     4. match breakpoint/watchpoint
+
+
+[%autowidth]
+|===
+| operation         | write               | read                | AMO
+
+| `shadow_update`   |                     | trc[].rdt -> shadow |
+| `shadow_remember` | shadow -> trc[].rdt |
+| `shadow_apply`    | trc[].wdt -> shadow |
+| `shadow_revert`   | shadow -> trc[].rdt |
+|===
+
 == VSCode integration
 
 * `useExtendedRemote` https://github.com/microsoft/vscode-cpptools/issues/9505
@@ -242,7 +396,7 @@ Press `Ctrl-A, x` to exit emulation.
 make -C uart01/ ARMGNU=arm-none-eabi
 qemu-system-arm -M versatilepb -m 128M -nographic -kernel uart01/notmain.bin
 qemu-system-arm -M versatilepb -m 128M -nographic -kernel uart01/notmain.bin -icount shift=auto,rr=record,rrfile=replay.bin
-qemu-system-arm -M versatilepb -m 128M -nographic -kernel uart01/notmain.bin -icount shift=auto,rr=replay,rrfile=replay.bin 
+qemu-system-arm -M versatilepb -m 128M -nographic -kernel uart01/notmain.bin -icount shift=auto,rr=replay,rrfile=replay.bin
 ```
 
 ```sh
@@ -266,6 +420,10 @@ https://medium.com/@tatsuo.nomura/implement-gdb-remote-debug-protocol-stub-from-
 Mirosoft C/C++ DAP adapter:
 
 GDB:
+
+* Questions:
+  * What signal should the stub send to GDB, when continue reaches the beginning of execution?
+  * What should be the step response if there is no breakpoint/watchpoint?
 
 QEMU:
 
@@ -301,12 +459,12 @@ List of major public RISC-V simulators with comments about interfacing with GDB 
 * link:https://github.com/riscv-software-src/riscv-isa-sim[spike]
   link:https://chipyard.readthedocs.io/en/latest/Advanced-Concepts/Chip-Communication.html#using-the-jtag-interface[communicates with GDB through JTAG and OpenOCD]
   (link:https://github.com/riscv-software-src/riscv-isa-sim?tab=readme-ov-file#debugging-with-gdb[GDB example]),
-  does not seem to support reverse execution),
+  does not seem to support reverse execution,
 * link:https://www.intel.com/content/www/us/en/developer/articles/tool/simics-simulator.html[Intel® Simics® Simulator]
   has link:https://intel.github.io/tsffs/simics/target-guide-risc-v-simple/index.html[RISC-V] support
   can be link:https://intel.github.io/tsffs/simics/simics-user-guide/gdb.html[connected with GDB]
   although link:https://intel.github.io/tsffs/simics/simics-user-guide/revexec.html[reverse execution] can only be done from the native console,
-* link:[QEMU]
+* link:https://www.qemu.org/[QEMU]
   (link:https://qemu-project.gitlab.io/qemu/system/gdb.html[GDB usage],
    link:https://qemu-project.gitlab.io/qemu/system/replay.html[Record/replay])
   the Wiki page link:https://wiki.qemu.org/Features/record-replay[Features/record-replay] indicates record/replay is not tested for RISC-V,
