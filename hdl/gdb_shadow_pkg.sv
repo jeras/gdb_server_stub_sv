@@ -98,6 +98,9 @@ package gdb_shadow_pkg;
 
         // constructor
         function new ();
+            // TODO:
+            // RISC-V specific x0 (zero) initialization
+            gpr[0] = '0;
             // array of memory regions
             for (int unsigned i=0; i<$size(MMAP); i++) begin
                 mem[i] = new[MMAP[i].size];
@@ -274,14 +277,15 @@ package gdb_shadow_pkg;
 
         function backward ();
             int status;
+            // decrement retirement counter
+            cnt--;
             // revert the previous retired instruction to the shadow
             // if there is no previous retired instruction,
             // there is nothing to apply to the shadow
+            $display("DEBUG: BACKWARD: trc.size() = %0d, trc[%0d] = %p", trc.size(), cnt, trc[cnt]);
             if (cnt != 0) begin
-                status = revert(trc[cnt]);
+                status = revert(trc[cnt-1]);
             end
-            // decrement retirement counter
-            cnt--;
         endfunction: backward
 
     endclass: gdb_shadow

@@ -146,6 +146,7 @@ module nerv_gdb #(
       lsu_siz <= `cpu.insn_funct3[1:0];
       lsu_wdt <= `cpu.mem_wr_data;
 
+      // TODO: rethink the timing in this code
       @(negedge clk);
       -> sample_step;
 

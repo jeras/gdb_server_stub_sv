@@ -739,8 +739,6 @@ package gdb_server_stub_pkg;
     // read packet
     status = gdb_get_packet(pkt);
 
-    $display("DBG: REGN = %d", REGN);
-
     pkt = "";
     for (int unsigned i=0; i<REGN; i++) begin
       // swap byte order since they are sent LSB first
@@ -1011,8 +1009,9 @@ package gdb_server_stub_pkg;
       // perform DUT step
       dut_step(ret);
       dut.shd.trc.push_back(ret);
-      dut.shd.forward();
     end
+    // handle shadow and trace
+    dut.shd.forward();
 
     // breakpoint/watchpoint
     // TODO: pass the event to the response
@@ -1079,7 +1078,7 @@ package gdb_server_stub_pkg;
     endcase
 
     // TODO handle PC write errors
-    dut_jump(addr);
+    //dut_jump(addr);
 
     // step forward
     do begin
@@ -1110,14 +1109,23 @@ package gdb_server_stub_pkg;
 // GDB reverse step/continue
 ///////////////////////////////////////////////////////////////////////////////
 
-  task gdb_backward_step;
-    retired_t ret;
+  function void gdb_backward_step;
+    // record (if not replay)
+    if (dut.shd.cnt > 1) begin
+      // handle shadow and trace
+      dut.shd.backward();
+    end else begin
+      // can't go further
+      // TODO: maybe there is a better option than a trap, check what QEMU does
+      dut.sig = SIGTRAP;
+      return;
+    end
 
     // breakpoint/watchpoint
     // TODO: pass the event to the response
-    dut.sig = gdb_breakpoint_match(ret);
-    dut.sig = gdb_watchpoint_match(ret);
-  endtask: gdb_backward_step
+    dut.sig = gdb_breakpoint_match(dut.shd.trc[dut.shd.cnt]);
+    dut.sig = gdb_watchpoint_match(dut.shd.trc[dut.shd.cnt]);
+  endfunction: gdb_backward_step
 
   task gdb_backward;
     byte ch [] = new[1];
@@ -1132,6 +1140,8 @@ package gdb_server_stub_pkg;
       "bs": begin
         // backward step
         gdb_backward_step;
+        // send response
+        status = gdb_stop_reply(dut.sig);
       end
       "bc": begin
         // backward continue
