@@ -15,7 +15,7 @@ package gdb_shadow_pkg;
 // GDB shadow class
 ///////////////////////////////////////////////////////////////////////////////
 
-    virtual class gdb_shadow #(
+    class gdb_shadow #(
         // 32/64 bit CPU selection
         parameter  int unsigned XLEN = 32,  // register/address/data width
         // choice between F/D/Q floating point support
@@ -36,7 +36,7 @@ package gdb_shadow_pkg;
 
         // registers
         logic [XLEN-1:0] gpr [0:GPRN-1];  // GPR (general purpose register file)
-        logic [XLEN-1:0] pc;              // PC  (program counter)
+        bit   [XLEN-1:0] pc;              // PC  (program counter)
 //      logic [FLEN-1:0] fpr [0:  32-1];  // FPR (floating point register file)
         logic [XLEN-1:0] csr [0:CSRN-1];  // CSR (configuration status registers)
 
@@ -110,7 +110,7 @@ package gdb_shadow_pkg;
 
         // write register to shadow copy
         function void reg_write (
-          input bit    [5-1:0] idx,
+          input int unsigned   idx,
           input bit [XLEN-1:0] val
         );
             if (idx < GPRN) begin
@@ -126,7 +126,7 @@ package gdb_shadow_pkg;
 
         // read register from shadow copy
         function logic [XLEN-1:0] reg_read (
-          input bit    [5-1:0] idx
+          input int unsigned   idx
         );
             if (idx < GPRN) begin
                 return(gpr[idx]);
@@ -188,6 +188,7 @@ package gdb_shadow_pkg;
         );
             // IFU/PC
             mem_write(ret.ifu.adr, ret.ifu.rdt);
+            pc = ret.ifu.adr;
             // CSR
             for (int unsigned i=0; i<ret.csr.size(); i++) begin: csr_idx
                 csr[ret.csr[i].idx] = ret.csr[i].rdt;
@@ -219,7 +220,7 @@ package gdb_shadow_pkg;
             ref retired_t ret
         );
             // PC
-            pc = ret.ifu.adr;
+            pc = ret.ifu.pcn;
             // GPR remember the old value and apply the new one
             for (int unsigned i=0; i<ret.gpr.size(); i++) begin: gpr_idx
                 bit [5-1:0] r = ret.gpr[i].idx;
@@ -256,34 +257,29 @@ package gdb_shadow_pkg;
 
         function forward ();
             int status;
-
             // replay the previous retired instruction to the shadow
             // if there is no previous retired instruction,
             // there is nothing to apply to the shadow
-            if (cnt != 0) begin
-                status = replay(trc[cnt]);
+            if (cnt > 0) begin
+                status = replay(trc[cnt-1]);
             end
-
             // record (if not replay)
             if (cnt == trc.size()) begin
                 status = update(trc[cnt]);
                 status = record(trc[cnt]);
             end
-
             // increment retirement counter
             cnt++;
         endfunction: forward
 
         function backward ();
             int status;
-
             // revert the previous retired instruction to the shadow
             // if there is no previous retired instruction,
             // there is nothing to apply to the shadow
             if (cnt != 0) begin
                 status = revert(trc[cnt]);
             end
-
             // decrement retirement counter
             cnt--;
         endfunction: backward

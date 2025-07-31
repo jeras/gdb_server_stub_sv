@@ -39,6 +39,8 @@ module nerv_gdb #(
   import socket_dpi_pkg::*;
   import gdb_server_stub_pkg::*;
 
+  event sample_step;
+
 ///////////////////////////////////////////////////////////////////////////////
 // DUT interface
 ///////////////////////////////////////////////////////////////////////////////
@@ -46,12 +48,13 @@ module nerv_gdb #(
   logic            ret_ena;  // retire enable
 
   logic [XLEN-1:0] ifu_adr;  // IFU instruction address
+  logic [XLEN-1:0] ifu_pcn;  // IFU PC next
   logic [ILEN-1:0] ifu_rdt;  // IFU instruction
   logic            ifu_ill;  // IFU illegal instruction
 
   logic            gpr_wen;  // GPR destination write enable
   logic    [5-1:0] gpr_idx;  // GPR destination index
-  logic [XLEN-1:0] gpr_val;  // GPR destination value
+  logic [XLEN-1:0] gpr_wdt;  // GPR destination value
 
   logic            csr_ena;  // CSR enable
   logic   [12-1:0] csr_idx;  // CSR index
@@ -131,19 +134,24 @@ module nerv_gdb #(
       end while (~ret_ena);
 
       // synchronous sampling
-      ifu_adr <= `cpu.npc;
+      ifu_adr <= `cpu.imem_addr_q;
+      ifu_pcn <= `cpu.npc;
       ifu_rdt <= `cpu.insn;
       ifu_ill <= 1'b0;
       gpr_wen <= `cpu.next_wr;
       gpr_idx <= `cpu.wr_rd;
-      gpr_val <= `cpu.next_rd;
+      gpr_wdt <= `cpu.next_rd;
       lsu_ena <= `cpu.dmem_valid & `cpu.mem_wr_enable;
       lsu_adr <= `cpu.dmem_addr;
       lsu_siz <= `cpu.insn_funct3[1:0];
       lsu_wdt <= `cpu.mem_wr_data;
 
+      @(negedge clk);
+      -> sample_step;
+
       // populate structure
       ret.ifu.adr = ifu_adr;
+      ret.ifu.pcn = ifu_pcn;
       ret.ifu.rdt = new[2**2]({<<8{ifu_rdt}});  // TODO: handle different instruction sizes
 //    ret.ifu.rdt = new[2**lsu_siz]({<<8{ifu_rdt}});
       ret.ifu.ill = ifu_ill;
@@ -151,7 +159,7 @@ module nerv_gdb #(
         ret.gpr = new[1];
         ret.gpr[0] = '{
           idx: gpr_idx,
-          wdt: gpr_val,
+          wdt: gpr_wdt,
           default: 'x
         };
       end
@@ -160,6 +168,7 @@ module nerv_gdb #(
         ret.lsu.rdt = new[2**lsu_siz]({<<8{lsu_rdt}});
         ret.lsu.wdt = new[2**lsu_siz]({<<8{lsu_wdt}});
       end
+      $display("DEBUG: dut_step: ret = %p", ret);
     endtask: dut_step
 
     virtual task dut_jump (

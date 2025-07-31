@@ -248,9 +248,9 @@ update is for current instruction read data
    * LOAD: load program into memory.
    * INSPECT: the debugger will see the reset state of the SoC either before or after the program is loaded.
    * FORWARD (as part of the RESET and breakpoint at RESET sequence):
-     1. ~`shadow_replay(cnt-1)`~
      2. `dut_step(ret)` (collects first retired instruction)
      3. `push(ret)` (trace `trc[cnt]`)
+     1. ~`shadow_replay(cnt-1)`~
      5. `shadow_record(cnt)`
      4. `match(cnt)` breakpoint/watchpoint
    * ~BACKWARD~

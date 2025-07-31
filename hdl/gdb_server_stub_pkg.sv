@@ -421,7 +421,8 @@ package gdb_server_stub_pkg;
                                           "* 'set debug on/off',\n",
                                           "* 'set register=dut/shadow' (reading registers from dut/shadow, default is shadow),\n",
                                           "* 'set memory=dut/shadow' (reading memories from dut/shadow, default is shadow),\n",
-                                          "* 'reset'."});
+                                          "* 'reset assert' (assert reset for a few clock periods),\n",
+                                          "* 'reset release' (synchronously release reset)."});
       end
       "set debug on": begin
         stub_state.debug_log = 1'b1;
@@ -449,11 +450,11 @@ package gdb_server_stub_pkg;
       end
       "reset assert": begin
         dut_reset_assert;
-        status = gdb_query_monitor_reply("Assert DUT reset.\n");
+        status = gdb_query_monitor_reply("DUT reset asserted.\n");
       end
       "reset release": begin
         dut_reset_release;
-        status = gdb_query_monitor_reply("Performed a reset release cycle on DUT.\n");
+        status = gdb_query_monitor_reply("DUT reset released.\n");
       end
       default begin
         status = gdb_query_monitor_reply("'monitor' command was not recognized.\n");
@@ -528,7 +529,6 @@ package gdb_server_stub_pkg;
     if ($sscanf(pkt, "qRcmd,%s", str) > 0) begin
       gdb_query_monitor(gdb_hex2ascii(str));
       //status = gdb_query_monitor(gdb_hex2ascii(str));
-      status = gdb_send_packet("OK");
     end else begin
       // not supported, send empty response packet
       status = gdb_send_packet("");
@@ -1044,7 +1044,7 @@ package gdb_server_stub_pkg;
     endcase
 
     // TODO handle PC write errors
-    dut_jump(addr);
+    //dut_jump(addr);
 
     // forward step
     gdb_forward_step;
