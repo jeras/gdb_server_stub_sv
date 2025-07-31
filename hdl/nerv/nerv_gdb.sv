@@ -46,7 +46,7 @@ module nerv_gdb #(
   logic            ret_ena;  // retire enable
 
   logic [XLEN-1:0] ifu_adr;  // IFU instruction address
-  logic [ILEN-1:0] ifu_ins;  // IFU instruction
+  logic [ILEN-1:0] ifu_rdt;  // IFU instruction
   logic            ifu_ill;  // IFU illegal instruction
 
   logic            gpr_wen;  // GPR destination write enable
@@ -61,7 +61,8 @@ module nerv_gdb #(
   logic            lsu_ena;  // LSU enable
   logic    [2-1:0] lsu_siz;  // LSU logarithmic size
   logic [XLEN-1:0] lsu_adr;  // LSU address
-  logic [XLEN-1:0] lsu_dat;  // LSU data
+  logic [XLEN-1:0] lsu_wdt;  // LSU data
+  logic [XLEN-1:0] lsu_rdt;  // LSU data
 
   assign ret_ena = (`cpu.cycle_insn && !`cpu.mem_rd_enable) || `cpu.cycle_trap || `cpu.cycle_late_wr;
 
@@ -111,13 +112,15 @@ module nerv_gdb #(
     // reset and step
     /////////////////////////////////////////////
 
-    virtual task dut_reset;
-      // go through a reset sequence
+    virtual task dut_reset_assert;
       rst = 1'b1;
       repeat (4) @(posedge clk);
+    endtask: dut_reset_assert
+
+    virtual task dut_reset_release;
       rst <= 1'b0;
       repeat (1) @(posedge clk);
-    endtask: dut_reset
+    endtask: dut_reset_release
 
     virtual task dut_step (
       ref retired_t ret
@@ -129,7 +132,7 @@ module nerv_gdb #(
 
       // synchronous sampling
       ifu_adr <= `cpu.npc;
-      ifu_ins <= `cpu.insn;
+      ifu_rdt <= `cpu.insn;
       ifu_ill <= 1'b0;
       gpr_wen <= `cpu.next_wr;
       gpr_idx <= `cpu.wr_rd;
@@ -137,23 +140,25 @@ module nerv_gdb #(
       lsu_ena <= `cpu.dmem_valid & `cpu.mem_wr_enable;
       lsu_adr <= `cpu.dmem_addr;
       lsu_siz <= `cpu.insn_funct3[1:0];
-      lsu_dat <= `cpu.mem_wr_data;
+      lsu_wdt <= `cpu.mem_wr_data;
 
       // populate structure
       ret.ifu.adr = ifu_adr;
-      ret.ifu.ins = ifu_ins;
+      ret.ifu.rdt = new[2**2]({<<8{ifu_rdt}});  // TODO: handle different instruction sizes
+//    ret.ifu.rdt = new[2**lsu_siz]({<<8{ifu_rdt}});
       ret.ifu.ill = ifu_ill;
       if (gpr_wen) begin
         ret.gpr = new[1];
         ret.gpr[0] = '{
           idx: gpr_idx,
-          val: gpr_val,
+          wdt: gpr_val,
           default: 'x
         };
       end
       if (lsu_ena) begin
         ret.lsu.adr = lsu_adr;
-        ret.lsu.val = new[2**lsu_siz]({<<8{lsu_dat}});
+        ret.lsu.rdt = new[2**lsu_siz]({<<8{lsu_rdt}});
+        ret.lsu.wdt = new[2**lsu_siz]({<<8{lsu_wdt}});
       end
     endtask: dut_step
 

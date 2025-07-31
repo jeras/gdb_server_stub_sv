@@ -9,6 +9,7 @@
 package gdb_server_stub_pkg;
 
   import socket_dpi_pkg::*;
+  import gdb_shadow_pkg::*;
 
   // byte dynamic array type for casting to/from string
   typedef byte array_t [];
@@ -106,113 +107,30 @@ package gdb_server_stub_pkg;
       "QStartNoAckMode": "-"   // TODO: test it
     };
 
-///////////////////////////////////////////////////////////////////////////////
-// shadow copy state
-///////////////////////////////////////////////////////////////////////////////
+    typedef gdb_shadow #(
+      // 32/64 bit CPU selection
+      .XLEN   (XLEN),
+      // choice between F/D/Q floating point support
+//    .FLEN   (FLEN),
+      // number of all registers
+      .GPRN   (GPRN),
+      .CSRN   (CSRN),
+      // memory map (shadow memory map)
+      .SIZE_T (SIZE_T),
+      .MEMN   (MEMN  ),
+      .MMAP_T (MMAP_T),
+      .MMAP   (MMAP  )
+    ) gdb_shadow_t;
 
-    // DUT shadow state
-    typedef struct {
-      // signal
-      signal_t         sig;             // signal
-      // registers
-      logic [XLEN-1:0] gpr [0:GPRN-1];  // GPR (general purpose registers)
-      logic [XLEN-1:0] pc;              // PC (program counter)
-      logic [XLEN-1:0] csr [0:CSRN-1];  // CSR (configuration status registers)
-      // memories
-      array_t          mem [0:MEMN-1];  // array of memory regions
-      // I/O regions
-      // TODO: add something based on associative arrays
-    } shadow_t;
-
-///////////////////////////////////////////////////////////////////////////////
-// retired instruction trace
-///////////////////////////////////////////////////////////////////////////////
-
-    // IFU (instruction fetch unit)
-    typedef struct {
-      bit   [XLEN-1:0] adr;  // instruction address (current PC)
-      bit   [XLEN-1:0] pcn;  // next PC
-      array_t          ins;  // current instruction
-      bit              ill;  // illegal instruction (DUT behavior might not be defined)
-      // TODO: add interrupts
-    } retired_ifu_t;
-
-    // GPRs (NOTE: 4-state values)
-    typedef struct {
-      bit      [5-1:0] idx;  // GPR index
-      logic [XLEN-1:0] rdt;  // read  data (current destination register value)
-      logic [XLEN-1:0] wdt;  // write data (next    destination register value)
-    } retired_gpr_t;
-
-    // CSRs (NOTE: 2-state values)
-    typedef struct {
-      bit     [12-1:0] idx;  // CSR index
-      bit   [XLEN-1:0] rdt;  // read  data
-      bit   [XLEN-1:0] wdt;  // write data
-    } retired_csr_t;
-
-    // LSU (load store unit)
-    // (memory/IO access size is encoded in array size)
-    typedef struct {
-      bit   [XLEN-1:0] adr;  // data address
-      array_t          rdt;  // read  data
-      array_t          wdt;  // write data
-    } retired_lsu_t;
-
-    // instruction retirement history log entry
-    typedef struct {
-      retired_ifu_t ifu;
-      retired_gpr_t gpr [];
-      retired_csr_t csr [];
-      retired_lsu_t lsu;
-    } retired_t;
+    typedef gdb_shadow_t::retired_t retired_t;
 
     // DUT simulation state
     typedef struct {
-      shadow_t     shd;
-      retired_t    trc [$];  // trace queue
-      int unsigned cnt;      // retired instruction counter
+      signal_t     sig;
+      gdb_shadow_t shd;
     } dut_state_t;
 
     dut_state_t dut;
-
-///////////////////////////////////////////////////////////////////////////////
-// shadow copy functions
-///////////////////////////////////////////////////////////////////////////////
-
-    // write register to shadow copy
-    function void shd_reg_write (
-      input bit    [5-1:0] idx,
-      input bit [XLEN-1:0] val
-    );
-      if (idx < GPRN) begin
-        dut.shd.gpr[idx] = val;
-      end else
-      if (idx == GPRN) begin
-        dut.shd.pc = val;
-      end else
-      if (idx > GPRN) begin
-        dut.shd.csr[idx-1-GPRN] = val;
-      end
-    endfunction: shd_reg_write
-
-    // read register from shadow copy
-    function logic [XLEN-1:0] shd_reg_read (
-      input bit    [5-1:0] idx
-    );
-      if (idx < GPRN) begin
-        return(dut.shd.gpr[idx]);
-      end else
-      if (idx == GPRN) begin
-        return(dut.shd.pc);
-      end else
-      if (idx > GPRN) begin
-        return(dut.shd.csr[idx-1-GPRN]);
-      end else
-      begin
-        return('x);
-      end
-    endfunction: shd_reg_read
 
 ///////////////////////////////////////////////////////////////////////////////
 // constructor
@@ -239,18 +157,19 @@ package gdb_server_stub_pkg;
 
       // DUT shadow state initialization
       // signal
-      dut.shd.sig = SIGTRAP;
-      // array of memory regions
-      for (int unsigned i=0; i<$size(MMAP); i++) begin
-        dut.shd.mem[i] = new[MMAP[i].size];
-      end
+      dut.sig = SIGTRAP;
+      // shadow
+      dut.shd = new();
+
     endfunction: new
 
 ///////////////////////////////////////////////////////////////////////////////
 // architecture register/memory access function prototypes
 ///////////////////////////////////////////////////////////////////////////////
 
-    pure virtual task dut_reset;
+    pure virtual task dut_reset_assert;
+
+    pure virtual task dut_reset_release;
 
     pure virtual task dut_step (
       ref retired_t ret
@@ -448,10 +367,10 @@ package gdb_server_stub_pkg;
 
   // TODO: Send a exception packet "T <value>"
   function automatic int gdb_stop_reply (
-    input byte signal = dut.shd.sig
+    input byte signal = dut.sig
   );
     // reply with signal (current signal by default)
-    return(gdb_send_packet($sformatf("S%02h", dut.shd.sig)));
+    return(gdb_send_packet($sformatf("S%02h", dut.sig)));
   endfunction: gdb_stop_reply
 
   // send ERROR number reply
@@ -528,9 +447,13 @@ package gdb_server_stub_pkg;
         stub_state.memory = 1'b0;
         status = gdb_query_monitor_reply("Reading memory from shadow copy.\n");
       end
-      "reset": begin
-        dut_reset;
-        status = gdb_query_monitor_reply("Performed a reset cycle on DUT.\n");
+      "reset assert": begin
+        dut_reset_assert;
+        status = gdb_query_monitor_reply("Assert DUT reset.\n");
+      end
+      "reset release": begin
+        dut_reset_release;
+        status = gdb_query_monitor_reply("Performed a reset release cycle on DUT.\n");
       end
       default begin
         status = gdb_query_monitor_reply("'monitor' command was not recognized.\n");
@@ -663,9 +586,9 @@ package gdb_server_stub_pkg;
     for (SIZE_T i=0; i<len; i++) begin
       string tmp = "XX";
       if (stub_state.memory) begin
-        val = dut_mem_read(adr+i);
+        val =     dut_mem_read(adr+i);
       end else begin
-        val = shd_mem_read(adr+i, 1)[0];
+        val = dut.shd.mem_read(adr+i, 1)[0];
       end
       tmp = $sformatf("%02h", val);
       pkt[i*2+0] = tmp[0];
@@ -719,8 +642,8 @@ package gdb_server_stub_pkg;
 //      $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, dut_mem_read(adr+i));
       // TODO handle memory access errors
       // NOTE: memory writes are always done to both DUT and shadow
-      void'(dut_mem_write(adr+i,            dat  ));
-      void'(shd_mem_write(adr+i, array_t'('{dat})));
+      void'(    dut_mem_write(adr+i,            dat  ));
+      void'(dut.shd.mem_write(adr+i, array_t'('{dat})));
     end
 
     // send response
@@ -757,9 +680,9 @@ package gdb_server_stub_pkg;
     pkt = {len{8'h00}};
     for (SIZE_T i=0; i<len; i++) begin
       if (stub_state.memory) begin
-        pkt[i] = dut_mem_read(adr+i);
+        pkt[i] =     dut_mem_read(adr+i);
       end else begin
-        pkt[i] = shd_mem_read(adr+i, 1)[0];
+        pkt[i] = dut.shd.mem_read(adr+i, 1)[0];
       end
     end
 
@@ -793,8 +716,8 @@ package gdb_server_stub_pkg;
     for (SIZE_T i=0; i<len; i++) begin
       // TODO handle memory access errors
       // NOTE: memory writes are always done to both DUT and shadow
-      void'(dut_mem_write(adr+i,            pkt[code+i]  ));
-      void'(shd_mem_write(adr+i, array_t'('{pkt[code+i]})));
+      void'(    dut_mem_write(adr+i,            pkt[code+i]  ));
+      void'(dut.shd.mem_write(adr+i, array_t'('{pkt[code+i]})));
     end
 
     // send response
@@ -824,7 +747,7 @@ package gdb_server_stub_pkg;
       if (stub_state.register) begin
         val = {<<8{dut_reg_read(i)}};
       end else begin
-        val = {<<8{shd_reg_read(i)}};
+        val = {<<8{dut.shd.reg_read(i)}};
       end
       case (XLEN)
         32: pkt = {pkt, $sformatf("%08h", val)};
@@ -862,7 +785,7 @@ package gdb_server_stub_pkg;
       // swap byte order since they are sent LSB first
       // NOTE: register writes are always done to both DUT and shadow
       dut_reg_write(i, {<<8{val}});
-      shd_reg_write(i, {<<8{val}});
+      dut.shd.reg_write(i, {<<8{val}});
     end
 
     // send response
@@ -891,7 +814,7 @@ package gdb_server_stub_pkg;
     if (stub_state.register) begin
       val = {<<8{dut_reg_read(idx)}};
     end else begin
-      val = {<<8{shd_reg_read(idx)}};
+      val = {<<8{dut.shd.reg_read(idx)}};
     end
     case (XLEN)
       32: pkt = {pkt, $sformatf("%08h", val)};
@@ -926,7 +849,7 @@ package gdb_server_stub_pkg;
     // swap byte order since they are sent LSB first
     // NOTE: register writes are always done to both DUT and shadow
     dut_reg_write(idx, {<<8{val}});
-    shd_reg_write(idx, {<<8{val}});
+    dut.shd.reg_write(idx, {<<8{val}});
 //    case (XLEN)
 //      32: $display("DEBUG: GPR[%0d] <= 32'h%08h", idx, val);
 //      64: $display("DEBUG: GPR[%0d] <= 64'h%016h", idx, val);
@@ -1024,7 +947,7 @@ package gdb_server_stub_pkg;
     input retired_t ret
   );
     int status;
-    signal_t tmp = dut.shd.sig;
+    signal_t tmp = dut.sig;
     SIZE_T   adr = ret.ifu.adr;
 
     // match illegal instruction
@@ -1035,8 +958,8 @@ package gdb_server_stub_pkg;
     end else
     // match EBREAK/C.EBREAK instruction (software breakpoint)
     // TODO: there are also explicit SW breakpoints that depend on ILEN
-    if ((ret.ifu.rdt[32-1:0] == 32'h00100073) ||
-        (ret.ifu.rdt[16-1:0] == 16'h9002)) begin
+    if ((ret.ifu.rdt[0:3] == '{8'h73, 8'h00, 8'h10, 8'h00}) ||  // 32'h00100073
+        (ret.ifu.rdt[0:1] == '{8'h02, 8'h90})) begin  // 16'h9002
       tmp = SIGTRAP;
       $display("DEBUG: Triggered SW breakpoint at address %h.", adr);
       status = gdb_stop_reply(tmp);
@@ -1057,9 +980,9 @@ package gdb_server_stub_pkg;
     input retired_t ret
   );
     int status;
-    signal_t tmp = dut.shd.sig;
+    signal_t tmp = dut.sig;
     SIZE_T   adr =       ret.lsu.adr;
-    bit      wen = $size(ret.lsu.val) > 0;
+    bit      wen = $size(ret.lsu.wdt) > 0;
 
     // match hardware breakpoint
     if (points.exists(adr)) begin
@@ -1076,110 +999,6 @@ package gdb_server_stub_pkg;
   endfunction: gdb_watchpoint_match
 
 ///////////////////////////////////////////////////////////////////////////////
-// rembering/applying/reverting retired instruction to/from DUT shadow state
-///////////////////////////////////////////////////////////////////////////////
-
-    // read from shadow memory
-    function automatic array_t shd_mem_read (
-      SIZE_T adr,
-      SIZE_T siz
-    );
-      array_t tmp = new[siz];
-      for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: map
-        if ((adr >= MMAP[blk].base) &&
-            (adr <  MMAP[blk].base + MMAP[blk].size)) begin: mem
-            tmp = {>>{dut.shd.mem[blk] with [adr - MMAP[blk].base +: siz]}};
-        end: mem
-      end: map
-      return tmp;
-    endfunction: shd_mem_read
-
-    // write to shadow memory
-    function automatic void shd_mem_write (
-      SIZE_T  adr,
-      array_t dat
-    );
-      SIZE_T siz = dat.size();
-      for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: map
-        if ((adr >= MMAP[blk].base) &&
-            (adr <  MMAP[blk].base + MMAP[blk].size)) begin: mem
-          for (int unsigned i=0; i<siz; i++) begin: byt
-            dut.shd.mem[blk][adr - MMAP[blk].base] = dat[i];
-          end: byt
-        end: mem
-      end: map
-    endfunction: shd_mem_write
-
-    // update the shadow with state experienced by retired instruction (GPR/PC are no affected)
-    // for example CSR state changes and memory writes by a DMA
-    function automatic int shadow_update (
-      int unsigned idx
-    );
-      // IFU/PC
-      shd_mem_write(dut.trc[idx].ifu.adr, dut.trc[idx].ifu.rdt);
-      // CSR
-      for (int unsigned i=0; i<dut.trc[idx].csr.size(); i++) begin: csr
-        dut.shd.csr[dut.trc[idx].csr[i].idx] = dut.trc[idx].csr[i].rdt;
-      end: csr
-      // LSU
-      shd_mem_write(dut.trc[idx].lsu.adr, dut.trc[idx].lsu.rdt);
-    endfunction: shadow_update
-
-    // remember the current shadow state for all shadow state changes to be able to revert later
-    function automatic int shadow_remember (
-      int unsigned idx
-    );
-      // IFU/PC
-      dut.trc[idx].ifu.rdt = shd_mem_read(dut.trc[idx].ifu.adr, $size(dut.trc[idx].ifu.rdt));
-      dut.trc[idx].ifu.adr = dut.shd.pc;
-      // GPR
-      for (int unsigned i=0; i<dut.trc[idx].gpr.size(); i++) begin: gpr
-        dut.trc[idx].gpr[i].rdt = dut.shd.gpr[dut.trc[idx].gpr[i].idx];
-      end: gpr
-      // CSR
-      for (int unsigned i=0; i<dut.trc[idx].csr.size(); i++) begin: csr
-        dut.trc[idx].csr[i].rdt = dut.shd.csr[dut.trc[idx].csr[i].idx];
-      end: csr
-      // LSU
-      dut.trc[idx].lsu.rdt = shd_mem_read(dut.trc[idx].lsu.adr, $size(dut.trc[idx].lsu.wdt));
-    endfunction: shadow_remember
-
-    function automatic int shadow_apply (
-      int unsigned idx
-    );
-      // PC
-      dut.shd.pc = dut.trc[idx].ifu.adr;
-      // GPR remember the old value and apply the new one
-      for (int unsigned i=0; i<dut.trc[idx].gpr.size(); i++) begin: gpr
-        bit [5-1:0] r = dut.trc[idx].gpr[i].idx;
-        dut.shd.gpr[dut.trc[idx].gpr[i].idx] = dut.trc[idx].gpr[i].wdt;
-      end: gpr
-      // CSR remember the read value and apply wtitten value
-      for (int unsigned i=0; i<dut.trc[idx].csr.size(); i++) begin: csr
-        dut.shd.csr[dut.trc[idx].csr[i].idx] = dut.trc[idx].csr[i].wdt;
-      end: csr
-      // memory
-      shd_mem_write(dut.trc[idx].lsu.adr, dut.trc[idx].lsu.wdt);
-    endfunction: shadow_apply
-
-    function automatic int shadow_revert (
-      int unsigned idx
-    );
-      // PC
-      dut.shd.pc = dut.trc[idx-1].ifu.adr;
-      // GPR remember the old value and apply the new one
-      for (int unsigned i=0; i<dut.trc[idx].gpr.size(); i++) begin: gpr
-        dut.shd.gpr[dut.trc[idx].gpr[i].idx] = dut.trc[idx].gpr[i].rdt;
-      end: gpr
-      // CSR remember the read value and apply wtitten value
-      for (int unsigned i=0; i<dut.trc[idx].csr.size(); i++) begin: csr
-        dut.shd.csr[dut.trc[idx].csr[i].idx] = dut.trc[idx].csr[i].rdt;
-      end: csr
-      // memory
-      shd_mem_write(dut.trc[idx].lsu.adr, dut.trc[idx].lsu.rdt);
-    endfunction: shadow_revert
-
-///////////////////////////////////////////////////////////////////////////////
 // GDB step/continue
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -1187,28 +1006,18 @@ package gdb_server_stub_pkg;
     int       status;
     retired_t ret;
 
-    // apply the previous retired instruction to the shadow
-    // if there is no previous retired instruction,
-    // there is nothing to apply to the shadow
-    if (dut.cnt != 0) begin
-      status = shadow_apply(dut.cnt);
-    end
-
     // record (if not replay)
-    if (dut.cnt == dut.trc.size()) begin
+    if (dut.shd.cnt == dut.shd.trc.size()) begin
       // perform DUT step
       dut_step(ret);
-      dut.trc.push_back(ret);
-      status = shadow_update  (dut.cnt);
-      status = shadow_remember(dut.cnt);
+      dut.shd.trc.push_back(ret);
+      dut.shd.forward();
     end
 
     // breakpoint/watchpoint
     // TODO: pass the event to the response
-    dut.shd.sig = gdb_breakpoint_match(ret);
-    dut.shd.sig = gdb_watchpoint_match(ret);
-    // increment retirement counter
-    dut.cnt++;
+    dut.sig = gdb_breakpoint_match(ret);
+    dut.sig = gdb_watchpoint_match(ret);
   endtask: gdb_forward_step
 
   task gdb_step;
@@ -1229,7 +1038,7 @@ package gdb_server_stub_pkg;
       end
       "S": begin
         status = $sscanf(pkt, "S%h;%h", sig, addr);
-        dut.shd.sig = signal_t'(sig);
+        dut.sig = signal_t'(sig);
         jmp = (status == 2);
       end
     endcase
@@ -1241,7 +1050,7 @@ package gdb_server_stub_pkg;
     gdb_forward_step;
 
     // response packet
-    status = gdb_stop_reply(dut.shd.sig);
+    status = gdb_stop_reply(dut.sig);
   endtask: gdb_step
 
   task gdb_continue ();
@@ -1259,12 +1068,12 @@ package gdb_server_stub_pkg;
     case (pkt[0])
       "c": begin
         status = $sscanf(pkt, "c%h", addr);
-        dut.shd.sig = SIGNONE;
+        dut.sig = SIGNONE;
         jmp = (status == 1);
       end
       "C": begin
         status = $sscanf(pkt, "C%h;%h", sig, addr);
-        dut.shd.sig = signal_t'(sig);
+        dut.sig = signal_t'(sig);
         jmp = (status == 2);
       end
     endcase
@@ -1284,16 +1093,16 @@ package gdb_server_stub_pkg;
       end
       // in case of Ctrl+C (character 0x03)
       else if (ch[0] == SIGQUIT) begin
-        dut.shd.sig = SIGINT;
+        dut.sig = SIGINT;
         $display("DEBUG: Interrupt SIGQUIT (0x03) (Ctrl+c).");
         // send response
-        status = gdb_stop_reply(dut.shd.sig);
+        status = gdb_stop_reply(dut.sig);
       end
       // parse packet and loop back
       else begin
         gdb_packet(ch);
       end
-    end while (dut.shd.sig == SIGNONE);
+    end while (dut.sig == SIGNONE);
 
   endtask: gdb_continue
 
@@ -1302,25 +1111,12 @@ package gdb_server_stub_pkg;
 ///////////////////////////////////////////////////////////////////////////////
 
   task gdb_backward_step;
-    int       status;
     retired_t ret;
-
-    // revert the previous retired instruction to the shadow
-    // if there is no previous retired instruction,
-    // there is nothing to apply to the shadow
-    if (dut.cnt != 0) begin
-      status = shadow_revert(dut.cnt);
-    end
-
-    // 
-    ret = dut.trc[dut.cnt];
 
     // breakpoint/watchpoint
     // TODO: pass the event to the response
-    dut.shd.sig = gdb_breakpoint_match(ret);
-    dut.shd.sig = gdb_watchpoint_match(ret);
-    // decrement retirement counter
-    dut.cnt--;
+    dut.sig = gdb_breakpoint_match(ret);
+    dut.sig = gdb_watchpoint_match(ret);
   endtask: gdb_backward_step
 
   task gdb_backward;
@@ -1341,25 +1137,25 @@ package gdb_server_stub_pkg;
         // backward continue
         do begin
           gdb_backward_step;
-    
+
           status = socket_recv(ch, MSG_PEEK | MSG_DONTWAIT);
-    
+
           // if empty
           if (status != 1) begin
             // do nothing
           end
           // in case of Ctrl+C (character 0x03)
           else if (ch[0] == SIGQUIT) begin
-            dut.shd.sig = SIGINT;
+            dut.sig = SIGINT;
             $display("DEBUG: Interrupt SIGQUIT (0x03) (Ctrl+c).");
             // send response
-            status = gdb_stop_reply(dut.shd.sig);
+            status = gdb_stop_reply(dut.sig);
           end
           // parse packet and loop back
           else begin
             gdb_packet(ch);
           end
-        end while (dut.shd.sig == SIGNONE);
+        end while (dut.sig == SIGNONE);
       end
     endcase
   endtask: gdb_backward
@@ -1392,7 +1188,7 @@ package gdb_server_stub_pkg;
     status = gdb_get_packet(pkt);
 
     // perform RESET sequence
-    dut_reset();
+    dut_reset_assert();
 
     // do not send packet response here
   endtask: gdb_reset
@@ -1411,7 +1207,7 @@ package gdb_server_stub_pkg;
     stub_state = STUB_STATE_INIT;
 
     // stop HDL simulation, so the HDL simulator can render waveforms
-    $info("GDB: detached, stopping simulation from within state %s.", dut.shd.sig.name);
+    $info("GDB: detached, stopping simulation from within state %s.", dut.sig.name);
     $stop();
     // after user continues HDL simulation blocking wait for GDB client to reconnect
     $info("GDB: continuing stopped simulation, waiting for GDB to reconnect to.");

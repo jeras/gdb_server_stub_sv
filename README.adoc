@@ -232,49 +232,58 @@ For the execution trace the following naming scheme makes sense:
 
 | `monitor_step`    | wdata  -> `trc[].nxt` | rdata  -> `trc[].cur` | wdata  -> `trc[].nxt` : rdata  -> `trc[].cur`
 | `shadow_record`   | shadow -> `trc[].cur` | `trc[].cur` -> shadow | shadow -> `trc[].cur` : `trc[].cur` -> shadow
+| `shadow_update`   |                       | `trc[].cur` -> shadow |                         `trc[].cur` -> shadow
 | `shadow_replay`   | `trc[].nxt` -> shadow |                       | `trc[].nxt` -> shadow |
 | `shadow_revert`   | `trc[].cur` -> shadow | `trc[].cur` -> shadow | `trc[].cur` -> shadow |
 |===
 
-0. `cnt=0` (RESET)
+replay is for previous instruction write data,
+update is for current instruction read data
+
+0. RESET (empty trace queue)
    * INIT: initialize the shadow copy (memories, PC, CSR) based on DUT reset values.
    * A breakpoint or a hardcoded condition is placed at the RESET address.
      In accordance with the breakpoint abstraction, the simulation must retire the first instruction,
      therefore a step FORWARD is always performed after RESET.
+   * LOAD: load program into memory.
+   * INSPECT: the debugger will see the reset state of the SoC either before or after the program is loaded.
    * FORWARD (as part of the RESET and breakpoint at RESET sequence):
-     1. ~`shadow_apply()`~
+     1. ~`shadow_replay(cnt-1)`~
      2. `dut_step(ret)` (collects first retired instruction)
-     3. `push(ret)` (trace `trc[0]`)
-     4. `shadow_update(0)`
-     5. `shadow_remember(0)`
-     6. match breakpoint/watchpoint
-     7. `cnt++`
+     3. `push(ret)` (trace `trc[cnt]`)
+     5. `shadow_record(cnt)`
+     4. `match(cnt)` breakpoint/watchpoint
    * ~BACKWARD~
-1. `cnt=1`
+
+1. `cnt=0` (queue contains one element)
+   * INSPECT: the debugger will se the first instruction
    * FORWARD:
-     1. `shadow_apply(0)`
+     1. `shadow_replay(cnt)` (0)
+     7. `cnt++` (0 -> 1)
      2. `dut_step(ret)` (collects second retired instruction)
-     3. `push(ret)` (trace `trc[1]`)
-     4. `shadow_update(1)`
-     5. `shadow_remember(1)`
-     6. match breakpoint/watchpoint
-     7. `cnt++`
+     5. `shadow_record(cnt)`
+     3. `push(ret)` (trace `trc[cnt]`)
+     4. `match(cnt)` breakpoint/watchpoint
    * BACKWARD:
      * responds with an error, since there is nowhere to go
-1. `cnt=2`
-   * FORWARD:
-     1. `shadow_apply(1)`
+
+1. `cnt=1`
+   * FORWARD (record):
+     1. `shadow_replay(cnt)` (1)
+     7. `cnt++` (1 -> 2)
      2. `dut_step(ret)` (collects third retired instruction)
-     3. `push(ret)` (trace `trc[2]`)
-     4. `shadow_update(2)`
-     5. `shadow_remember(2)`
-     6. match breakpoint/watchpoint
+     3. `push(ret)` (trace `trc[cnt]`)
+     5. `shadow_record(cnt)`
+     4. `match(ret)` breakpoint/watchpoint
+   * FORWARD (replay):
+     1. `shadow_replay(cnt)`
      7. `cnt++`
+     1. `shadow_update(cnt)`
+     4. `match(cnt)` breakpoint/watchpoint
    * BACKWARD:
-     1. `shadow_remember(1)`
      2. `cnt--`
-     3. `ret = trc[0]`
-     4. match breakpoint/watchpoint
+     1. `shadow_revert(1)`
+     4. `match(cnt)` breakpoint/watchpoint
 
 
 [%autowidth]

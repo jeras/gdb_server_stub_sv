@@ -11,6 +11,7 @@ SRC+=${PATH_GDB}/socket_dpi_pkg.c
 
 # SystemVerilog bench (Test SV)
 TSV+=${PATH_GDB}/socket_dpi_pkg.sv
+TSV+=${PATH_GDB}/gdb_shadow_pkg.sv
 TSV+=${PATH_GDB}/gdb_server_stub_pkg.sv
 
 # NERV files

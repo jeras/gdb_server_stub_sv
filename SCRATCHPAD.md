@@ -140,3 +140,19 @@ https://www.reddit.com/r/FPGA/comments/nfkuq6/modelsim_fatal_vsim3828_could_not_
 
 `record full`
 
+# Unfinished issues
+
+https://github.com/raspberrypi/pico-feedback/issues/153
+
+I apologize, since my question does not directly relate to the PICO.
+
+I would assume the sequence of events would be something like this:
+1. `monitor reset halt` would RESET the CPU and:
+   A. keep it RESET or
+   B. halted in debug mode.
+2. `load` would load the program into the RAM at address `0x20000000`. so the debug controller within the PICO and the system bus segment between it and the RAM should not be have an active RESET.
+3. either:
+    1. `continue` without a breakpoint would 
+5.  cause the release of the RESET and the program would execute normally.3b. `stepi` would release the reset and stop at the first instruction at address
+
+I am actually working on a solution for debugging SW while it runs withing a cycle accurate HDL simulation, the added restriction is, that the debugger never affects the cycle accuracy of the execution and there will be the option to reverse step/continue.
