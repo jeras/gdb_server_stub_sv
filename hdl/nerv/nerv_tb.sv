@@ -48,7 +48,7 @@ module nerv_tb #(
 //  .XML_REGISTERS (XML_REGISTERS),
 //  .XML_MEMORY    (XML_MEMORY),
     // DEBUG parameters
-//  .DEBUG_LOG     (DEBUG_LOG)
+//  .REMOTE_LOG     (REMOTE_LOG)
   ) gdb (
     // system signals
     .clk     (clk),

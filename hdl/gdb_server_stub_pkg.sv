@@ -68,7 +68,7 @@ package gdb_server_stub_pkg;
     parameter  type         MMAP_T = struct {SIZE_T base; SIZE_T size;},
     parameter  MMAP_T       MMAP [0:MEMN-1] = '{default: '{base: 0, size: 256}},
     // DEBUG parameters
-    parameter  bit DEBUG_LOG = 1'b1
+    parameter  bit REMOTE_LOG = 1'b1
   );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -76,7 +76,7 @@ package gdb_server_stub_pkg;
 ///////////////////////////////////////////////////////////////////////////////
 
     typedef struct {
-      bit debug_log;    // debug log mode
+      bit remote_log;    // debug log mode
       bit acknowledge;  // acknowledge mode
       bit extended;     // extended remote mode
       bit register;     // read registers from (0-shadow, 1-DUT)
@@ -84,7 +84,7 @@ package gdb_server_stub_pkg;
     } stub_state_t;
 
     localparam stub_state_t STUB_STATE_INIT = '{
-      debug_log: DEBUG_LOG,
+      remote_log: REMOTE_LOG,
       acknowledge: 1'b1,
       extended: 1'b0,
       register: 1'b0,
@@ -215,7 +215,7 @@ package gdb_server_stub_pkg;
 
   function automatic int gdb_get_packet(
     output string pkt,
-    input bit    ack = stub_state.acknowledge
+    input  bit    ack = stub_state.acknowledge
   );
     int status;
     int unsigned len;
@@ -238,9 +238,8 @@ package gdb_server_stub_pkg;
 
     // extract packet data from received string
     pkt = str.substr(1,len-4);
-    if (stub_state.debug_log) begin
-  //    $display("DEBUG: <= %s", str);
-      $display("DEBUG: <- %s", pkt);
+    if (stub_state.remote_log) begin
+      $display("REMOTE: <- %s", pkt);
     end
 
     // calculate packet data checksum
@@ -277,8 +276,8 @@ package gdb_server_stub_pkg;
     byte   checksum = 0;
     string checksum_str;
 
-    if (stub_state.debug_log) begin
-      $display("DEBUG: -> %p", pkt);
+    if (stub_state.remote_log) begin
+      $display("REMOTE: -> %s", pkt);
     end
 
     // Send packet start
@@ -418,19 +417,19 @@ package gdb_server_stub_pkg;
     case (str)
       "help": begin
         status = gdb_query_monitor_reply({"HELP: Available monitor commands:\n",
-                                          "* 'set debug on/off',\n",
+                                          "* 'set remote log on/off',\n",
                                           "* 'set register=dut/shadow' (reading registers from dut/shadow, default is shadow),\n",
                                           "* 'set memory=dut/shadow' (reading memories from dut/shadow, default is shadow),\n",
                                           "* 'reset assert' (assert reset for a few clock periods),\n",
                                           "* 'reset release' (synchronously release reset)."});
       end
-      "set debug on": begin
-        stub_state.debug_log = 1'b1;
-        status = gdb_query_monitor_reply("Enabled debug logging to STDOUT.\n");
+      "set remote log on": begin
+        stub_state.remote_log = 1'b1;
+        status = gdb_query_monitor_reply("Enabled remote logging to STDOUT.\n");
       end
-      "set debug off": begin
-        stub_state.debug_log = 1'b0;
-        status = gdb_query_monitor_reply("Disabled debug logging.\n");
+      "set remote log off": begin
+        stub_state.remote_log = 1'b0;
+        status = gdb_query_monitor_reply("Disabled remote logging.\n");
       end
       "set register=dut": begin
         stub_state.register = 1'b1;

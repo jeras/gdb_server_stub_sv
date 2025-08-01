@@ -29,7 +29,7 @@ module nerv_gdb #(
   parameter  string       XML_REGISTERS = "",
   parameter  string       XML_MEMORY    = "",
   // DEBUG parameters
-  parameter  bit          DEBUG_LOG = 1'b1
+  parameter  bit          REMOTE_LOG = 1'b1
 )(
   // system signals
   input  logic clk,  // clock
@@ -88,7 +88,7 @@ module nerv_gdb #(
     parameter  type         MMAP_T = struct {SIZE_T base; SIZE_T size;},
     parameter  MMAP_T       MMAP [0:MEMN-1] = '{default: '{base: 0, size: 256}},
     // DEBUG parameters
-    parameter  bit DEBUG_LOG = 1'b1
+    parameter  bit REMOTE_LOG = 1'b1
   ) extends gdb_server_stub #(
     .XLEN      (XLEN  ),
     .ILEN      (ILEN  ),
@@ -99,7 +99,7 @@ module nerv_gdb #(
     .MEMN      (MEMN  ),
     .MMAP_T    (MMAP_T),
     .MMAP      (MMAP  ),
-    .DEBUG_LOG (DEBUG_LOG)
+    .REMOTE_LOG (REMOTE_LOG)
   );
 
     // constructor
