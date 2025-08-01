@@ -30,6 +30,9 @@ package gdb_shadow_pkg;
         parameter  MMAP_T       MMAP [0:MEMN-1] = '{default: '{base: 0, size: 256}}
     );
 
+    // dictionary of array_t
+    typedef array_t dictionary_t [SIZE_T];
+
 ///////////////////////////////////////////////////////////////////////////////
 // retired instruction trace
 ///////////////////////////////////////////////////////////////////////////////
@@ -84,7 +87,10 @@ package gdb_shadow_pkg;
         logic [XLEN-1:0] csr [0:CSRN-1];  // CSR (configuration status registers)
 
         // memories
-        array_t          mem [0:MEMN-1];  // array of memory regions
+        array_t          mem [0:MEMN-1];  // array of address map regions
+
+        // memory mapped I/O registers (covers address space not covered by memories)
+        dictionary_t     i_o;
 
         // trace queue
         retired_t        trc [$];
@@ -104,6 +110,8 @@ package gdb_shadow_pkg;
             for (int unsigned i=0; i<$size(MMAP); i++) begin
                 mem[i] = new[MMAP[i].size];
             end
+            // initialize I/O dictionaries
+            i_o.delete();
             // initialize trace queue
             trc.delete();
             // initialize counter (the counter points to no instruction)
@@ -158,12 +166,18 @@ package gdb_shadow_pkg;
             SIZE_T siz
         );
             array_t tmp = new[siz];
+            // reading from an address map block
             for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: map
                 if ((adr >= MMAP[blk].base) &&
                     (adr <  MMAP[blk].base + MMAP[blk].size)) begin: slice
                     tmp = {>>{mem[blk] with [adr - MMAP[blk].base +: siz]}};
+                    return tmp;
                 end: slice
             end: map
+            // reading from an unmapped IO region (reads have higher priority)
+            // TODO: handle access to nonexistent entries with a warning?
+            // TODO: handle access with a size mismatch
+            tmp = i_o[adr];
             return tmp;
         endfunction: mem_read
 
@@ -172,15 +186,19 @@ package gdb_shadow_pkg;
             SIZE_T  adr,
             array_t dat
         );
-            SIZE_T siz = dat.size();
+            // writing to an address map block
             for (int unsigned blk=0; blk<$size(MMAP); blk++) begin: map
                 if ((adr >= MMAP[blk].base) &&
                     (adr <  MMAP[blk].base + MMAP[blk].size)) begin: slice
-                    for (int unsigned i=0; i<siz; i++) begin: byt
-                      mem[blk][adr - MMAP[blk].base] = dat[i];
-                    end: byt
+                    {>>{mem[blk] with [adr - MMAP[blk].base +: dat.size()]}} = dat;
+//                    for (int unsigned i=0; i<dat.size(); i++) begin: byt
+//                      mem[blk][adr - MMAP[blk].base] = dat[i];
+//                    end: byt
+                    return;
                 end: slice
             end: map
+            // writing to an unmapped IO region (reads have higher priority)
+            i_o[adr] = dat;
         endfunction: mem_write
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -229,7 +247,6 @@ package gdb_shadow_pkg;
             pc = ret.ifu.pcn;
             // GPR remember the old value and apply the new one
             for (int unsigned i=0; i<ret.gpr.size(); i++) begin: gpr_idx
-                bit [5-1:0] r = ret.gpr[i].idx;
                 gpr[ret.gpr[i].idx] = ret.gpr[i].wdt;
             end: gpr_idx
             // CSR remember the read value and apply written value

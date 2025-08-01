@@ -450,6 +450,8 @@ package gdb_server_stub_pkg;
       end
       "reset assert": begin
         dut_reset_assert;
+        // TODO: rethink whether to reset the shadow or keep it
+        //dut.shd = new();
         status = gdb_query_monitor_reply("DUT reset asserted.\n");
       end
       "reset release": begin
