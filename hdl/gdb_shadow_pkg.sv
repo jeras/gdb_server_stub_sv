@@ -207,7 +207,7 @@ package gdb_shadow_pkg;
 
         // update the shadow with state experienced by retired instruction (GPR/PC are no affected)
         // for example CSR state changes and memory writes by a DMA
-        function automatic int update (
+        function automatic void update (
             ref retired_t ret
         );
             // IFU/PC
@@ -222,7 +222,7 @@ package gdb_shadow_pkg;
         endfunction: update
 
         // remember the current shadow state for all shadow state changes to be able to revert later
-        function automatic int record (
+        function automatic void record (
             ref retired_t ret
         );
             // IFU/PC
@@ -240,7 +240,7 @@ package gdb_shadow_pkg;
             ret.lsu.rdt = mem_read(ret.lsu.adr, $size(ret.lsu.wdt));
         endfunction: record
 
-        function automatic int replay (
+        function automatic void replay (
             ref retired_t ret
         );
             // PC
@@ -257,7 +257,7 @@ package gdb_shadow_pkg;
             mem_write(ret.lsu.adr, ret.lsu.wdt);
         endfunction: replay
 
-        function automatic int revert (
+        function automatic void revert (
             ref retired_t ret
         );
             // PC
@@ -278,32 +278,30 @@ package gdb_shadow_pkg;
 // forward/backward steps
 ///////////////////////////////////////////////////////////////////////////////
 
-        function forward ();
-            int status;
+        function void forward ();
             $display("DEBUG: FORWARD: trc.size() = %0d, trc[%0d] = %p", trc.size(), cnt, trc[cnt-1]);
             // replay the previous retired instruction to the shadow
             // if there is no previous retired instruction,
             // there is nothing to apply to the shadow
             if (cnt != -1) begin
-                status = replay(trc[cnt]);
+                replay(trc[cnt]);
             end
             // increment retirement counter
             cnt++;
             // update/record (if not in replay mode)
             if (cnt == trc.size()) begin
-                status = update(trc[cnt]);
-                status = record(trc[cnt]);
+                update(trc[cnt]);
+                record(trc[cnt]);
             end
         endfunction: forward
 
-        function backward ();
-            int status;
+        function void backward ();
             $display("DEBUG: BACKWARD-I: trc.size() = %0d, trc[%0d] = %p", trc.size(), cnt, trc[cnt]);
             // revert the previous retired instruction to the shadow
             // if there is no previous retired instruction,
             // there is nothing to apply to the shadow
             if (cnt != 0) begin
-                status = revert(trc[cnt-1]);
+                revert(trc[cnt-1]);
             end
             // decrement retirement counter
             cnt--;
