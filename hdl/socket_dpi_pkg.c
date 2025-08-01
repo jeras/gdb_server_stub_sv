@@ -55,7 +55,7 @@ int socket_listen(const char* name) {
   // bind socket file descriptor to socket
   if (bind(sfd, (struct sockaddr *) &server, sizeof(struct sockaddr_un)) == -1) {
     printf("DPI-C: Bind failed with errno = %0d.\n", errno);
-    perror("socket");
+    perror("socket bind");
     return -1;
   }
 
@@ -75,7 +75,7 @@ int socket_accept () {
   cfd = accept(sfd, NULL, NULL);
   if (cfd < 0) {
     printf("DPI-C: Server accept failed with errno = %d.\n", errno);
-    perror("socket");
+    perror("socket accept");
     exit(0);
   } else {
     printf("DPI-C: Accepted client connection fd = %d\n", cfd);
@@ -98,6 +98,7 @@ int socket_send (const svOpenArrayHandle data, int flags) {
   if (status == -1) {
     // https://en.wikipedia.org/wiki/Errno.h
     printf("SEND failed with errno = %0d.\n", errno);
+    perror("socket send");
     return -1;
   }
   return status;
@@ -110,6 +111,7 @@ int socket_recv (const svOpenArrayHandle data, int flags) {
   if (status == -1) {
     // https://en.wikipedia.org/wiki/Errno.h
     printf("RECV failed with errno = %0d.\n", errno);
+    perror("socket recv");
     return -1;
   }
   return status;
