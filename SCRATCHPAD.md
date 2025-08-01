@@ -31,6 +31,8 @@ source riscv_gdb_stub.cmd
 (gdb) load
 (gdb) monitor reset release
 (gdb) stepi
+
+(gdb) source ../../test/firmware/gdb.cmd
 ```
 
 Manipulating registers:

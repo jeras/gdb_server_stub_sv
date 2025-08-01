@@ -952,7 +952,6 @@ package gdb_server_stub_pkg;
     if (ret.ifu.ill) begin
       tmp = SIGILL;
       $display("DEBUG: Triggered illegal instruction at address %h.", adr);
-      status = gdb_stop_reply(tmp);
     end else
     // match EBREAK/C.EBREAK instruction (software breakpoint)
     // TODO: there are also explicit SW breakpoints that depend on ILEN
@@ -960,14 +959,12 @@ package gdb_server_stub_pkg;
         (ret.ifu.rdt[0:1] == '{8'h02, 8'h90})) begin  // 16'h9002
       tmp = SIGTRAP;
       $display("DEBUG: Triggered SW breakpoint at address %h.", adr);
-      status = gdb_stop_reply(tmp);
     end else
     // match hardware breakpoint
     if (points.exists(adr)) begin
       if (points[adr].ptype == hwbreak) begin
         tmp = SIGTRAP;
         $display("DEBUG: Triggered HW breakpoint at address %h.", adr);
-        status = gdb_stop_reply(tmp);
       end
     end
     return(tmp);
@@ -990,7 +987,6 @@ package gdb_server_stub_pkg;
         // TODO: check is transfer size matches
         tmp = SIGTRAP;
         $display("DEBUG: Triggered HW watchpoint at address %h.", adr);
-        status = gdb_stop_reply(tmp);
       end
     end
     return(tmp);
@@ -1094,8 +1090,6 @@ package gdb_server_stub_pkg;
       else if (ch[0] == SIGQUIT) begin
         dut.sig = SIGINT;
         $display("DEBUG: Interrupt SIGQUIT (0x03) (Ctrl+c).");
-        // send response
-        status = gdb_stop_reply(dut.sig);
       end
       // parse packet and loop back
       else begin
@@ -1103,6 +1097,8 @@ package gdb_server_stub_pkg;
       end
     end while (dut.sig == SIGNONE);
 
+    // send response
+    status = gdb_stop_reply(dut.sig);
   endtask: gdb_continue
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1123,8 +1119,8 @@ package gdb_server_stub_pkg;
 
     // breakpoint/watchpoint
     // TODO: pass the event to the response
-    dut.sig = gdb_breakpoint_match(dut.shd.trc[dut.shd.cnt]);
-    dut.sig = gdb_watchpoint_match(dut.shd.trc[dut.shd.cnt]);
+    dut.sig = gdb_breakpoint_match(dut.shd.trc[dut.shd.cnt-1]);
+    dut.sig = gdb_watchpoint_match(dut.shd.trc[dut.shd.cnt-1]);
   endfunction: gdb_backward_step
 
   task gdb_backward;
@@ -1140,8 +1136,6 @@ package gdb_server_stub_pkg;
       "bs": begin
         // backward step
         gdb_backward_step;
-        // send response
-        status = gdb_stop_reply(dut.sig);
       end
       "bc": begin
         // backward continue
@@ -1158,8 +1152,6 @@ package gdb_server_stub_pkg;
           else if (ch[0] == SIGQUIT) begin
             dut.sig = SIGINT;
             $display("DEBUG: Interrupt SIGQUIT (0x03) (Ctrl+c).");
-            // send response
-            status = gdb_stop_reply(dut.sig);
           end
           // parse packet and loop back
           else begin
@@ -1168,6 +1160,9 @@ package gdb_server_stub_pkg;
         end while (dut.sig == SIGNONE);
       end
     endcase
+
+    // send response
+    status = gdb_stop_reply(dut.sig);
   endtask: gdb_backward
 
 ///////////////////////////////////////////////////////////////////////////////
