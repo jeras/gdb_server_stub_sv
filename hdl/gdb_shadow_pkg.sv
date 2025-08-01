@@ -31,22 +31,6 @@ package gdb_shadow_pkg;
     );
 
 ///////////////////////////////////////////////////////////////////////////////
-// shadow state
-///////////////////////////////////////////////////////////////////////////////
-
-        // registers
-        logic [XLEN-1:0] gpr [0:GPRN-1];  // GPR (general purpose register file)
-        bit   [XLEN-1:0] pc;              // PC  (program counter)
-//      logic [FLEN-1:0] fpr [0:  32-1];  // FPR (floating point register file)
-        logic [XLEN-1:0] csr [0:CSRN-1];  // CSR (configuration status registers)
-
-        // memories
-        array_t          mem [0:MEMN-1];  // array of memory regions
-
-        // instruction counter
-        SIZE_T           cnt;
-
-///////////////////////////////////////////////////////////////////////////////
 // retired instruction trace
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -89,8 +73,24 @@ package gdb_shadow_pkg;
             retired_lsu_t lsu;
         } retired_t;
 
+///////////////////////////////////////////////////////////////////////////////
+// shadow state
+///////////////////////////////////////////////////////////////////////////////
+
+        // registers
+        logic [XLEN-1:0] gpr [0:GPRN-1];  // GPR (general purpose register file)
+        bit   [XLEN-1:0] pc;              // PC  (program counter)
+//      logic [FLEN-1:0] fpr [0:  32-1];  // FPR (floating point register file)
+        logic [XLEN-1:0] csr [0:CSRN-1];  // CSR (configuration status registers)
+
+        // memories
+        array_t          mem [0:MEMN-1];  // array of memory regions
+
         // trace queue
-        retired_t trc [$];
+        retired_t        trc [$];
+
+        // instruction counter
+        SIZE_T           cnt;
 
 ///////////////////////////////////////////////////////////////////////////////
 // constructor
@@ -98,13 +98,16 @@ package gdb_shadow_pkg;
 
         // constructor
         function new ();
-            // TODO:
             // RISC-V specific x0 (zero) initialization
             gpr[0] = '0;
-            // array of memory regions
+            // initialize array of memory regions
             for (int unsigned i=0; i<$size(MMAP); i++) begin
                 mem[i] = new[MMAP[i].size];
             end
+            // initialize trace queue
+            trc.delete();
+            // initialize counter (the counter points to no instruction)
+            cnt = -1;
         endfunction: new
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -260,32 +263,34 @@ package gdb_shadow_pkg;
 
         function forward ();
             int status;
+            $display("DEBUG: FORWARD: trc.size() = %0d, trc[%0d] = %p", trc.size(), cnt, trc[cnt-1]);
             // replay the previous retired instruction to the shadow
             // if there is no previous retired instruction,
             // there is nothing to apply to the shadow
-            if (cnt > 0) begin
-                status = replay(trc[cnt-1]);
+            if (cnt != -1) begin
+                status = replay(trc[cnt]);
             end
-            // record (if not replay)
+            // increment retirement counter
+            cnt++;
+            // update/record (if not in replay mode)
             if (cnt == trc.size()) begin
                 status = update(trc[cnt]);
                 status = record(trc[cnt]);
             end
-            // increment retirement counter
-            cnt++;
         endfunction: forward
 
         function backward ();
             int status;
-            // decrement retirement counter
-            cnt--;
+            $display("DEBUG: BACKWARD-I: trc.size() = %0d, trc[%0d] = %p", trc.size(), cnt, trc[cnt]);
             // revert the previous retired instruction to the shadow
             // if there is no previous retired instruction,
             // there is nothing to apply to the shadow
-            $display("DEBUG: BACKWARD: trc.size() = %0d, trc[%0d] = %p", trc.size(), cnt, trc[cnt]);
             if (cnt != 0) begin
                 status = revert(trc[cnt-1]);
             end
+            // decrement retirement counter
+            cnt--;
+            $display("DEBUG: BACKWARD-O: trc.size() = %0d, trc[%0d] = %p", trc.size(), cnt, trc[cnt]);
         endfunction: backward
 
     endclass: gdb_shadow

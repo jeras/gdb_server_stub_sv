@@ -1000,8 +1000,8 @@ package gdb_server_stub_pkg;
     int       status;
     retired_t ret;
 
-    // record (if not replay)
-    if (dut.shd.cnt == dut.shd.trc.size()) begin
+    // record (if not in replay mode)
+    if (dut.shd.cnt == dut.shd.trc.size()-1) begin
       // perform DUT step
       dut_step(ret);
       dut.shd.trc.push_back(ret);
@@ -1029,6 +1029,7 @@ package gdb_server_stub_pkg;
     case (pkt[0])
       "s": begin
         status = $sscanf(pkt, "s%h", addr);
+//        dut.sig = SIGNONE;
         jmp = (status == 1);
       end
       "S": begin
@@ -1107,20 +1108,26 @@ package gdb_server_stub_pkg;
 
   function void gdb_backward_step;
     // record (if not replay)
-    if (dut.shd.cnt > 1) begin
-      // handle shadow and trace
-      dut.shd.backward();
-    end else begin
-      // can't go further
+    if (dut.shd.cnt == -1) begin
+      // DUT is still somewhere in the reset sequence
+      // TODO: return some kind of error
+      dut.sig = SIGTRAP;
+      return;
+    end
+    else if (dut.shd.cnt == 0) begin
+      // already at the beginning of history, can't go further back
       // TODO: maybe there is a better option than a trap, check what QEMU does
       dut.sig = SIGTRAP;
       return;
+    end else begin
+      // handle shadow and trace
+      dut.shd.backward();
     end
 
     // breakpoint/watchpoint
     // TODO: pass the event to the response
-    dut.sig = gdb_breakpoint_match(dut.shd.trc[dut.shd.cnt-1]);
-    dut.sig = gdb_watchpoint_match(dut.shd.trc[dut.shd.cnt-1]);
+    dut.sig = gdb_breakpoint_match(dut.shd.trc[dut.shd.cnt]);
+    dut.sig = gdb_watchpoint_match(dut.shd.trc[dut.shd.cnt]);
   endfunction: gdb_backward_step
 
   task gdb_backward;
@@ -1135,11 +1142,13 @@ package gdb_server_stub_pkg;
     case (pkt[0:1])
       "bs": begin
         // backward step
+//        dut.sig = SIGNONE;
         gdb_backward_step;
       end
       "bc": begin
         // backward continue
         do begin
+          dut.sig = SIGNONE;
           gdb_backward_step;
 
           status = socket_recv(ch, MSG_PEEK | MSG_DONTWAIT);
