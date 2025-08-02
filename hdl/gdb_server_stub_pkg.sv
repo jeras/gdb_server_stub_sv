@@ -532,8 +532,8 @@ package gdb_server_stub_pkg;
     end else
     // start no acknowledge mode
     if (pkt == "QStartNoAckMode") begin
-      stub_state.acknowledge = 1'b0;
       status = gdb_send_packet("OK");
+      stub_state.acknowledge = 1'b0;
     end else
     // not supported, send empty response packet
     begin
