@@ -104,7 +104,7 @@ package gdb_server_stub_pkg;
       "multiprocess"   : "-",
       "ReverseStep"    : "+",
       "ReverseContinue": "+",
-      "QStartNoAckMode": "-"   // TODO: test it
+      "QStartNoAckMode": "+"   // TODO: test it
     };
 
     typedef gdb_shadow #(
@@ -239,7 +239,7 @@ package gdb_server_stub_pkg;
     // extract packet data from received string
     pkt = str.substr(1,len-4);
     if (stub_state.remote_log) begin
-      $display("REMOTE: <- %s", pkt);
+      $display("REMOTE: <- %p", pkt);
     end
 
     // calculate packet data checksum
@@ -277,7 +277,7 @@ package gdb_server_stub_pkg;
     string checksum_str;
 
     if (stub_state.remote_log) begin
-      $display("REMOTE: -> %s", pkt);
+      $display("REMOTE: -> %p", pkt);
     end
 
     // Send packet start
@@ -514,7 +514,6 @@ package gdb_server_stub_pkg;
   endfunction: gdb_query_supported
 
   task gdb_query_packet ();
-//  function automatic int gdb_query_packet ();
     string pkt;
     string str;
     int status;
@@ -527,16 +526,20 @@ package gdb_server_stub_pkg;
       $display("DEBUG: qSupported = %p", str);
       status = gdb_query_supported(str);
     end else
+    // parse various monitor packets
     if ($sscanf(pkt, "qRcmd,%s", str) > 0) begin
       gdb_query_monitor(gdb_hex2ascii(str));
-      //status = gdb_query_monitor(gdb_hex2ascii(str));
-    end else begin
-      // not supported, send empty response packet
+    end else
+    // start no acknowledge mode
+    if (pkt == "QStartNoAckMode") begin
+      stub_state.acknowledge = 1'b0;
+      status = gdb_send_packet("OK");
+    end else
+    // not supported, send empty response packet
+    begin
       status = gdb_send_packet("");
     end
-//    return(0);
   endtask: gdb_query_packet
-//  endfunction: gdb_query_packet
 
 ///////////////////////////////////////////////////////////////////////////////
 // GDB verbose
