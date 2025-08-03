@@ -12,6 +12,9 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include <netdb.h> 
+#include <netinet/in.h> 
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -28,61 +31,127 @@ int sfd;
 // client file descriptor
 int cfd;
 
-// create socket and mark it as passive
-int socket_listen(const char* name) {
-  struct sockaddr_un server;
+// create a UNIX socket and mark it as passive
+int socket_unix_listen(const char* name) {
+    struct sockaddr_un server;
 
-  printf("DPI-C: Creating socket %s\n", name);
-  // check file name length
-  if (strlen(name) == 0 || strlen(name) > sizeof(server.sun_path)-1) {
-    printf("DPI-C: Server socket path too long: %s\n", name);
-    return -1;
-  }
+    printf("DPI-C: Creating UNIX socket %s\n", name);
+    // check file name length
+    if (strlen(name) == 0 || strlen(name) > sizeof(server.sun_path)-1) {
+        printf("DPI-C: Server UNIX socket path too long: %s\n", name);
+        return -1;
+    }
 
-  // delete socket file if it exists
-  if (remove(name) == -1 && errno != ENOENT) {
-    printf("DPI-C: Failed to remove file %s\n", name);
-  }
+    // delete UNIX socket file if it exists
+    if (remove(name) == -1 && errno != ENOENT) {
+        printf("DPI-C: Failed to remove UNIX socket file %s\n", name);
+    }
 
-  // create socket file descriptor
-  sfd = socket(AF_UNIX, SOCK_STREAM, 0);
-  printf("DPI-C: Socket fd = %d\n", sfd);
+    // create UNIX socket file descriptor
+    sfd = socket(AF_UNIX, SOCK_STREAM, 0);
+    printf("DPI-C: UNIX socket fd = %d\n", sfd);
 
-  memset(&server, 0, sizeof(struct sockaddr_un));
-  server.sun_family = AF_UNIX;
-  strncpy(server.sun_path, name, sizeof(server.sun_path) - 1);
+    memset(&server, 0, sizeof(struct sockaddr_un));
+    server.sun_family = AF_UNIX;
+    strncpy(server.sun_path, name, sizeof(server.sun_path) - 1);
 
-  // bind socket file descriptor to socket
-  if (bind(sfd, (struct sockaddr *) &server, sizeof(struct sockaddr_un)) == -1) {
-    printf("DPI-C: Bind failed with errno = %0d.\n", errno);
-    perror("socket bind");
-    return -1;
-  }
+    // bind socket file descriptor to socket
+    if (bind(sfd, (struct sockaddr *)&server, sizeof(struct sockaddr_un)) == -1) {
+        printf("DPI-C: Bind failed with errno = %0d.\n", errno);
+        perror("socket bind");
+        return -1;
+    } else {
+        printf("DPI-C: Socket successfully binded...\n");
+    }
 
-  // mark the socket as passive (accepting connections from clients)
-  if (listen(sfd, 5) == -1) {
-    printf("DPI-C: Listen failed.\n");
-    return -1;
-  }
+    // mark the socket as passive (accepting connections from clients)
+    if (listen(sfd, 5) == -1) {
+        printf("DPI-C: Listen failed.\n");
+        return -1;
+    } else {
+        printf("DPI-C: Server listening..\n");
+    }
 
-  // return socket fd
-  return sfd;
+    // return socket fd
+    return sfd;
+}
+
+// create a TCP socket and mark it as passive
+int socket_tcp_listen(const uint16_t port) {
+    struct sockaddr_in server;
+
+    // TCP socket create and verification
+    sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd == -1) {
+        printf("DPI-C: Server TCP socket creation failed...\n");
+        return -1;
+    } else {
+        printf("DPI-C: TCP socket fd = %d\n", sfd);
+    }
+    bzero(&server, sizeof(server));
+
+    // assign IP, PORT
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = htonl(INADDR_ANY);
+    server.sin_port = htons(port);
+
+    // Binding newly created socket to given IP and verification
+    if ((bind(sfd, (struct sockaddr *)&server, sizeof(server))) != 0) {
+        printf("DPI-C: Bind failed with errno = %0d.\n", errno);
+        perror("socket bind");
+        return -1;
+    } else {
+        printf("DPI-C: Socket successfully binded...\n");
+    }
+
+    // Now server is ready to listen and verification
+    if ((listen(sfd, 5)) != 0) {
+        printf("DPI-C: Listen failed.\n");
+        return -1;
+    } else {
+        printf("DPI-C: Server listening..\n");
+    }
+
+    // return socket fd
+    return sfd;
 }
 
 // accept connection from client (to a given socket fd)
-int socket_accept () {
-  printf("DPI-C: Waiting for client to connect...\n");
-  cfd = accept(sfd, NULL, NULL);
-  if (cfd < 0) {
-    printf("DPI-C: Server accept failed with errno = %d.\n", errno);
-    perror("socket accept");
-    exit(0);
-  } else {
-    printf("DPI-C: Accepted client connection fd = %d\n", cfd);
-  }
+int socket_unix_accept () {
+    printf("DPI-C: Waiting for client to connect...\n");
+    cfd = accept(sfd, NULL, NULL);
+    if (cfd < 0) {
+        printf("DPI-C: Server accept failed with errno = %d.\n", errno);
+        perror("socket accept");
+        exit(0);
+    } else {
+        printf("DPI-C: Accepted client connection fd = %d\n", cfd);
+    }
+  
+    // return client fd
+    return cfd;
+}
 
-  // return client fd
-  return cfd;
+// accept connection from client (to a given TCP socket fd)
+int socket_tcp_accept () {
+    int len;
+    struct sockaddr_in client;
+
+    len = sizeof(client);
+
+    // Accept the data packet from client and verification
+    cfd = accept(sfd, (struct sockaddr *)&client, &len);
+    if (cfd < 0) {
+        printf("DPI-C: Server accept failed with errno = %d.\n", errno);
+        perror("socket accept");
+        exit(0);
+    }
+    else {
+        printf("DPI-C: Accepted client connection fd = %d\n", cfd);
+    }
+
+    // return client fd
+    return cfd;
 }
 
 // close connection from client

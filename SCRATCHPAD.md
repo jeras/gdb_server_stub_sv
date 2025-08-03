@@ -13,7 +13,7 @@ sudo socat -t100 -x -v UNIX-LISTEN:gdb_server_stub_socket,mode=777,reuseaddr,for
 
 
 
-```
+```gdb
 /opt/riscv-gcc/bin/riscv32-unknown-elf-gdb
 
 source riscv_gdb_stub.cmd
@@ -33,6 +33,21 @@ source riscv_gdb_stub.cmd
 (gdb) stepi
 
 (gdb) source ../../test/firmware/gdb.cmd
+```
+
+```lldb
+(lldb) log list
+(lldb) log enable gdb-remote packets
+(lldb) gdb-remote PORT
+(lldb) 
+(lldb) 
+(lldb) 
+(lldb) 
+(lldb) 
+(lldb) 
+(lldb) 
+(lldb) 
+(lldb) 
 ```
 
 Manipulating registers:

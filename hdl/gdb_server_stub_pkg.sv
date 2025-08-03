@@ -76,6 +76,7 @@ package gdb_server_stub_pkg;
 ///////////////////////////////////////////////////////////////////////////////
 
     typedef struct {
+      shortint unsigned socket_port;
       bit remote_log;    // debug log mode
       bit acknowledge;  // acknowledge mode
       bit extended;     // extended remote mode
@@ -84,6 +85,7 @@ package gdb_server_stub_pkg;
     } stub_state_t;
 
     localparam stub_state_t STUB_STATE_INIT = '{
+      socket_port: 0,
       remote_log: REMOTE_LOG,
       acknowledge: 1'b1,
       extended: 1'b0,
@@ -138,12 +140,20 @@ package gdb_server_stub_pkg;
 
     // constructor
     function new (
-      input string socket = ""
+      input string socket = "",
+      input shortint unsigned port = 0
     );
       int status;
 
-      // open character device for R/W
-      status = socket_listen(socket);
+//      stub_state.socket_port = socket.atoi();
+      stub_state.socket_port = port;
+
+      // start server
+      if (stub_state.socket_port) begin
+        status = socket_tcp_listen(stub_state.socket_port);
+      end else begin
+        status = socket_unix_listen(socket);
+      end
 
       // check socket
       if (status == 0) begin
@@ -153,7 +163,11 @@ package gdb_server_stub_pkg;
       end
 
       // accept connection from GDB (blocking)
-      status = socket_accept();
+      if (stub_state.socket_port) begin
+        status = socket_tcp_accept();
+      end else begin
+        status = socket_unix_accept();
+      end
 
       // DUT shadow state initialization
       // signal
@@ -1229,7 +1243,12 @@ package gdb_server_stub_pkg;
     $stop();
     // after user continues HDL simulation blocking wait for GDB client to reconnect
     $info("GDB: continuing stopped simulation, waiting for GDB to reconnect to.");
-    void'(socket_accept);
+    // accept connection from GDB (blocking)
+    if (stub_state.socket_port) begin
+      status = socket_tcp_accept();
+    end else begin
+      status = socket_unix_accept();
+    end
 
     return(0);
   endfunction: gdb_detach
