@@ -105,19 +105,19 @@ TODO (simple):
 * add support for more packets (`q*` queries, `v*`, ...),
   * query for capabilities,
   * advanced mode,
-  * mode without acknowledge,
+  * ~mode without acknowledge~, (DONE, tested)
 * expand support for additional formats of partially supported packets,
 * write regression tests (simple but a lot of work),
 * integration with GUI tools,
-* support for TCP sockets,
+* support for TCP sockets, (WIP)
 * support for handling illegal instructions,
-* backtracing,
+* backtracing, (WIP)
 * support for binary memory access packets (`x`/`X`),
   but this is not really necessary,
 * workarounds for Verilator issues,
-* LLDB support,
-* support for pausing the simulation (`$stop()`), to be able to see waveforms,
-  also enabling/disabling waveform dumping,
+* LLDB support, (WIP)
+* ~support for pausing the simulation (`$stop()`), to be able to see waveforms~, (DONE using the `D` packet, GDB `detach` command)
+  ~also enabling/disabling waveform dumping,~ (DONE using a `monitor` packet, not tested yet)
 * ...
 
 TODO (difficult):
@@ -129,8 +129,8 @@ TODO (difficult):
   * I/C (32/16 bit EBREAK instruction) breakpoints.
 * check whether there are race conditions to fix,
 * the code currently only runs in Questa, try to port to other simulators,
-* generalize access to more than one memory, and additional registers (CSR)
-  (full generalization requires the SystemVerilog simulator to support the `alias` keyword),
+* ~generalize access to more than one memory~ (DONE), and additional registers (CSR)
+  ~(full generalization requires the SystemVerilog simulator to support the `alias` keyword),~ (not necessary, used a different approach with shadow memory)
 * ...
 
 == Leaky abstraction

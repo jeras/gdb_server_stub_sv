@@ -11,8 +11,7 @@ module nerv_tb #(
   localparam int unsigned XLEN = 32,  // register/address/data width
   parameter  int unsigned GNUM = 32,  // GPR number
   // Unix/TCP socket/port
-  parameter  string       SOCKET,
-  parameter  shortint unsigned PORT = 0
+  parameter  string       SOCKET
 );
 
   // system signals
@@ -43,8 +42,7 @@ module nerv_tb #(
     // number of GPR registers
     .GNUM (GNUM),
     // Unix/TCP socket
-    .SOCKET        (SOCKET),
-    .PORT          (PORT)
+    .SOCKET        (SOCKET)
     // XML target/registers/memory description
 //  .XML_TARGET    (XML_TARGET),
 //  .XML_REGISTERS (XML_REGISTERS),

@@ -24,7 +24,6 @@ module nerv_gdb #(
   parameter  int unsigned GNUM = 32,  // GPR number can be 16 for RISC-V E extension (embedded)
   // Unix/TCP socket
   parameter  string       SOCKET = "gdb_server_stub_socket",
-  parameter  shortint unsigned PORT = 0,
   // XML target/registers/memory description
   parameter  string       XML_TARGET    = "",
   parameter  string       XML_REGISTERS = "",
@@ -105,12 +104,10 @@ module nerv_gdb #(
 
     // constructor
     function new(
-      input string socket = "",
-      input shortint unsigned port = 0
+      input string socket = ""
     );
       super.new(
-        .socket (socket),
-        .port   (port)
+        .socket (socket)
       );
     endfunction: new
 
@@ -234,7 +231,7 @@ module nerv_gdb #(
 
   initial
   begin: main_initial
-    gdb = new(SOCKET, PORT);
+    gdb = new(SOCKET);
     // start state machine
     gdb.gdb_fsm();
   end: main_initial

@@ -53,7 +53,6 @@ DEF += -defineall NERV_DBGREGS
 SOCKET ?= "gdb_server_stub_socket"
 PORT   ?= 0
 PAR += -GSOCKET=${SOCKET}
-PAR += -GPORT=${PORT}
 
 ################################################################################
 # Verilog plusargs

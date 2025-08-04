@@ -38,7 +38,7 @@ source riscv_gdb_stub.cmd
 ```lldb
 (lldb) log list
 (lldb) log enable gdb-remote packets
-(lldb) gdb-remote PORT
+(lldb) gdb-remote 8000
 (lldb) 
 (lldb) 
 (lldb) 
@@ -46,9 +46,10 @@ source riscv_gdb_stub.cmd
 (lldb) 
 (lldb) 
 (lldb) 
-(lldb) 
-(lldb) 
+(lldb) unix-connect:///tmp/socket
 ```
+https://github.com/llvm/llvm-project/issues/151891
+
 
 Manipulating registers:
 

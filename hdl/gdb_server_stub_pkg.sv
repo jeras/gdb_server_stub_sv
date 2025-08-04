@@ -99,15 +99,20 @@ package gdb_server_stub_pkg;
     // supported features
     string features_gdb  [string];
     string features_stub [string] = '{
-      "swbreak"        : "+",  // TODO: actually add it to reply
-      "hwbreak"        : "+",  // TODO: actually add it to reply
-      "error-message"  : "+",
-      "binary-upload"  : "-",  // TODO: for now it is broken
-      "multiprocess"   : "-",
-      "ReverseStep"    : "+",
-      "ReverseContinue": "+",
-      "QStartNoAckMode": "+"   // TODO: test it
+      "swbreak"            : "+",  // TODO: actually add it to reply
+      "hwbreak"            : "+",  // TODO: actually add it to reply
+      "error-message"      : "+",  // GDB (LLDB asks with QEnableErrorStrings)
+      "binary-upload"      : "-",  // TODO: for now it is broken
+      "multiprocess"       : "-",
+      "ReverseStep"        : "+",
+      "ReverseContinue"    : "+",
+      "QStartNoAckMode"    : "+"
     };
+
+    // TODO: this are LLDB features, but GDB are similar
+//      else if (x == "qXfer:features:read+")
+//      else if (x == "qXfer:memory-map:read+")
+//      else if (x == "qXfer:siginfo:read+")
 
     typedef gdb_shadow #(
       // 32/64 bit CPU selection
@@ -140,32 +145,16 @@ package gdb_server_stub_pkg;
 
     // constructor
     function new (
-      input string socket = "",
-      input shortint unsigned port = 0
+      input string socket = ""
     );
       int status;
 
 //      stub_state.socket_port = socket.atoi();
-      stub_state.socket_port = port;
-
-      // start server
-      if (stub_state.socket_port) begin
+      if ($sscanf(socket, ":%d", stub_state.socket_port)) begin
         status = socket_tcp_listen(stub_state.socket_port);
-      end else begin
-        status = socket_unix_listen(socket);
-      end
-
-      // check socket
-      if (status == 0) begin
-        $fatal(0, "Could not open '%s' device node.", socket);
-      end else begin
-        $info("Connected to '%0s'.", socket);
-      end
-
-      // accept connection from GDB (blocking)
-      if (stub_state.socket_port) begin
         status = socket_tcp_accept();
       end else begin
+        status = socket_unix_listen(socket);
         status = socket_unix_accept();
       end
 
@@ -386,7 +375,7 @@ package gdb_server_stub_pkg;
     return(gdb_send_packet($sformatf("S%02h", dut.sig)));
   endfunction: gdb_stop_reply
 
-  // send ERROR number reply
+  // send ERROR number reply (GDB only)
   // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
   function automatic int gdb_error_number_reply (
     input byte val = 0
@@ -394,13 +383,22 @@ package gdb_server_stub_pkg;
     return(gdb_send_packet($sformatf("E%02h", val)));
   endfunction: gdb_error_number_reply
 
-  // send ERROR text reply
+  // send ERROR text reply (GDB only)
   // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
   function automatic int gdb_error_text_reply (
     input string str = ""
   );
     return(gdb_send_packet($sformatf("E.%s", gdb_ascii2hex(str))));
   endfunction: gdb_error_text_reply
+
+  // send ERROR LLDB reply
+  // https://lldb.llvm.org/resources/lldbgdbremote.html#qenableerrorstrings
+  function automatic int gdb_error_lldb_reply (
+    input byte   val = 0,
+    input string str = ""
+  );
+    return(gdb_send_packet($sformatf("E%02h;%s", val, gdb_ascii2hex(str))));
+  endfunction: gdb_error_lldb_reply
 
   // send message to GDB console output
   function automatic int gdb_console_output (
@@ -432,6 +430,7 @@ package gdb_server_stub_pkg;
       "help": begin
         status = gdb_query_monitor_reply({"HELP: Available monitor commands:\n",
                                           "* 'set remote log on/off',\n",
+                                          "* 'set waveform dump on/off',\n",
                                           "* 'set register=dut/shadow' (reading registers from dut/shadow, default is shadow),\n",
                                           "* 'set memory=dut/shadow' (reading memories from dut/shadow, default is shadow),\n",
                                           "* 'reset assert' (assert reset for a few clock periods),\n",
@@ -444,6 +443,14 @@ package gdb_server_stub_pkg;
       "set remote log off": begin
         stub_state.remote_log = 1'b0;
         status = gdb_query_monitor_reply("Disabled remote logging.\n");
+      end
+      "set waveform dump on": begin
+        $dumpon;
+        status = gdb_query_monitor_reply("Enabled waveform dumping.\n");
+      end
+      "set waveform dump off": begin
+        $dumpoff;
+        status = gdb_query_monitor_reply("Disabled waveform dumping.\n");
       end
       "set register=dut": begin
         stub_state.register = 1'b1;
@@ -546,6 +553,11 @@ package gdb_server_stub_pkg;
     end else
     // start no acknowledge mode
     if (pkt == "QStartNoAckMode") begin
+      status = gdb_send_packet("OK");
+      stub_state.acknowledge = 1'b0;
+    end else
+    // start no acknowledge mode
+    if (pkt == "QEnableErrorStrings") begin
       status = gdb_send_packet("OK");
       stub_state.acknowledge = 1'b0;
     end else
