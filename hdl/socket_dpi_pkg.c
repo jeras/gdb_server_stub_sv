@@ -14,6 +14,7 @@
 
 #include <netdb.h> 
 #include <netinet/in.h> 
+#include <netinet/tcp.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -56,9 +57,9 @@ int socket_unix_listen(const char* name) {
     strncpy(server.sun_path, name, sizeof(server.sun_path) - 1);
 
     // bind socket file descriptor to socket
-    if (bind(sfd, (struct sockaddr *)&server, sizeof(struct sockaddr_un)) == -1) {
+    if (bind(sfd, (struct sockaddr *)&server, sizeof(struct sockaddr_un)) != 0) {
         printf("DPI-C: Bind failed with errno = %0d.\n", errno);
-        perror("socket bind");
+        perror("DPI-C: socket bind:");
         return -1;
     } else {
         printf("DPI-C: Socket successfully binded...\n");
@@ -98,7 +99,7 @@ int socket_tcp_listen(const uint16_t port) {
     // Binding newly created socket to given IP and verification
     if ((bind(sfd, (struct sockaddr *)&server, sizeof(server))) != 0) {
         printf("DPI-C: Bind failed with errno = %0d.\n", errno);
-        perror("socket bind");
+        perror("DPI-C: socket bind:");
         return -1;
     } else {
         printf("DPI-C: Socket successfully binded...\n");
@@ -122,7 +123,7 @@ int socket_unix_accept () {
     cfd = accept(sfd, NULL, NULL);
     if (cfd < 0) {
         printf("DPI-C: Server accept failed with errno = %d.\n", errno);
-        perror("socket accept");
+        perror("DPI-C: socket accept:");
         exit(0);
     } else {
         printf("DPI-C: Accepted client connection fd = %d\n", cfd);
@@ -143,11 +144,21 @@ int socket_tcp_accept () {
     cfd = accept(sfd, (struct sockaddr *)&client, &len);
     if (cfd < 0) {
         printf("DPI-C: Server accept failed with errno = %d.\n", errno);
-        perror("socket accept");
+        perror("DPI-C: socket accept:");
         exit(0);
     }
     else {
         printf("DPI-C: Accepted client connection fd = %d\n", cfd);
+    }
+
+    // disable the disable Nagle's algorithm in an attempt to speed up TCP
+    len = 1;
+    if (setsockopt(cfd, IPPROTO_TCP, TCP_NODELAY, &len, sizeof(len)) != 0) {
+        printf("DPI-C: Server socket options failed with errno = %d.\n", errno);
+        perror("DPI-C: setsockopt:");
+        exit(0);
+    } else {
+        printf("DPI-C: Server socket options set.\n");
     }
 
     // return client fd
@@ -166,8 +177,8 @@ int socket_send (const svOpenArrayHandle data, int flags) {
   status = send(cfd, svGetArrayPtr(data), svSizeOfArray(data), flags);
   if (status == -1) {
     // https://en.wikipedia.org/wiki/Errno.h
-    printf("SEND failed with errno = %0d.\n", errno);
-    perror("socket send");
+    printf("DPI-C: SEND failed with errno = %0d.\n", errno);
+    perror("DPI-C: socket send:");
     return -1;
   }
   return status;
@@ -179,8 +190,8 @@ int socket_recv (const svOpenArrayHandle data, int flags) {
   status = recv(cfd, svGetArrayPtr(data), svSizeOfArray(data), flags);
   if (status == -1) {
     // https://en.wikipedia.org/wiki/Errno.h
-    printf("RECV failed with errno = %0d.\n", errno);
-    perror("socket recv");
+    printf("DPI-C: RECV failed with errno = %0d.\n", errno);
+    perror("DPI-C: socket recv:");
     return -1;
   }
   return status;
