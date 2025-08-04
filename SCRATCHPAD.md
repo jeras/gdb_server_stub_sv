@@ -36,6 +36,8 @@ source riscv_gdb_stub.cmd
 ```
 
 ```lldb
+make -C questa SOCKET=":8000"
+
 (lldb) log list
 (lldb) log enable gdb-remote packets
 (lldb) gdb-remote 8000

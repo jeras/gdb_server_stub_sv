@@ -12,7 +12,10 @@ package gdb_server_stub_pkg;
   import gdb_shadow_pkg::*;
 
   // byte dynamic array type for casting to/from string
-  typedef byte array_t [];
+  typedef byte byte_array_t [];
+
+  // dynamic array of strings
+  typedef string string_array_t [];
 
   // byte dynamic array type for casting to/from string
 //  typedef byte dictionary_t [SIZE_T];
@@ -55,6 +58,8 @@ package gdb_server_stub_pkg;
   } point_t;
 
   virtual class gdb_server_stub #(
+    // list of CPUs
+    parameter  string_array_t THREADS = '{"CPU0"},
     // 8/16/32/64 bit CPU selection
     parameter  int unsigned XLEN = 32,  // register/address/data width
     parameter  int unsigned ILEN = 32,  // maximum instruction width
@@ -208,7 +213,7 @@ package gdb_server_stub_pkg;
 
   function automatic void gdb_write (string str);
     int status;
-    byte buffer [] = new[str.len()](array_t'(str));
+    byte buffer [] = new[str.len()](byte_array_t'(str));
     status = socket_send(buffer, 0);
   endfunction: gdb_write
 
@@ -246,7 +251,7 @@ package gdb_server_stub_pkg;
     end
 
     // calculate packet data checksum
-    cmd = new[len-4](array_t'(pkt));
+    cmd = new[len-4](byte_array_t'(pkt));
     checksum = cmd.sum();
 
     // Get checksum now
@@ -277,7 +282,6 @@ package gdb_server_stub_pkg;
     int status;
     byte   ch [] = new[1];
     byte   checksum = 0;
-    string checksum_str;
 
     if (stub_state.remote_log) begin
       $display("REMOTE: -> %p", pkt);
@@ -340,6 +344,7 @@ package gdb_server_stub_pkg;
   endfunction: gdb_ascii2hex
 
   // SyetemVerilog uses spaces as separator for strings and GDB packets don't use spaces
+  // replace separator characters with spaces
   function automatic string char2space (
     input string str,
     input byte   sep  // separator
@@ -369,10 +374,10 @@ package gdb_server_stub_pkg;
 
   // TODO: Send a exception packet "T <value>"
   function automatic int gdb_stop_reply (
-    input byte signal = dut.sig
+    input byte sig = dut.sig
   );
     // reply with signal (current signal by default)
-    return(gdb_send_packet($sformatf("S%02h", dut.sig)));
+    return(gdb_send_packet($sformatf("S%02h", sig)));
   endfunction: gdb_stop_reply
 
   // send ERROR number reply (GDB only)
@@ -534,6 +539,31 @@ package gdb_server_stub_pkg;
     return(0);
   endfunction: gdb_query_supported
 
+
+  function automatic string format_thread (
+    input int process,
+    input int thread
+  );
+    case (features_stub["multiprocess"])
+      "+": return($sformatf("p%h,%h", process, thread));
+      "-": return($sformatf("%0h", thread));
+    endcase
+  endfunction: format_thread
+
+  function automatic int sscan_thread (
+    input string str
+  );
+    int code;
+    int process;
+    int thread;
+    case (features_stub["multiprocess"])
+      "+": code = $sscanf(str, "p%h,%h;", process, thread);
+      "-": code = $sscanf(str, "%h", thread);
+    endcase
+    return(thread);
+  endfunction: sscan_thread
+
+
   task gdb_query_packet ();
     string pkt;
     string str;
@@ -560,6 +590,27 @@ package gdb_server_stub_pkg;
     if (pkt == "QEnableErrorStrings") begin
       status = gdb_send_packet("OK");
       stub_state.acknowledge = 1'b0;
+    end else
+    // query first thread info
+    if (pkt == "qfThreadInfo") begin
+      str = "m";
+      foreach (THREADS[thread]) begin
+        str = {str, format_thread(1, thread+1), ","};
+      end
+      // remove the trailing comma
+      str = str.substr(0, str.len()-2);
+      status = gdb_send_packet(str);
+    end else
+    // query subsequent thread info
+    if (pkt == "qsThreadInfo") begin
+      // last thread
+      status = gdb_send_packet("l");
+    end else
+    if ($sscanf(pkt, "qThreadExtraInfo,%s", str) > 0) begin
+      int thread;
+      thread = sscan_thread(str);
+      $display("DEBUG: qThreadExtraInfo: str = %p, thread = %0d, THREADS[%0d-1] = %s", str, thread, thread, THREADS[thread-1]);
+      status = gdb_send_packet(gdb_ascii2hex(THREADS[thread-1]));
     end else
     // not supported, send empty response packet
     begin
@@ -672,8 +723,8 @@ package gdb_server_stub_pkg;
 //      $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, dut_mem_read(adr+i));
       // TODO handle memory access errors
       // NOTE: memory writes are always done to both DUT and shadow
-      void'(    dut_mem_write(adr+i,            dat  ));
-      void'(dut.shd.mem_write(adr+i, array_t'('{dat})));
+      void'(    dut_mem_write(adr+i,                 dat  ));
+      void'(dut.shd.mem_write(adr+i, byte_array_t'('{dat})));
     end
 
     // send response
@@ -746,8 +797,8 @@ package gdb_server_stub_pkg;
     for (SIZE_T i=0; i<len; i++) begin
       // TODO handle memory access errors
       // NOTE: memory writes are always done to both DUT and shadow
-      void'(    dut_mem_write(adr+i,            pkt[code+i]  ));
-      void'(dut.shd.mem_write(adr+i, array_t'('{pkt[code+i]})));
+      void'(    dut_mem_write(adr+i,                 pkt[code+i]  ));
+      void'(dut.shd.mem_write(adr+i, byte_array_t'('{pkt[code+i]})));
     end
 
     // send response
