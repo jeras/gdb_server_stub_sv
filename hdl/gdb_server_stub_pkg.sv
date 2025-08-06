@@ -43,11 +43,13 @@ package gdb_server_stub_pkg;
 
   // point type
   typedef enum int unsigned {
-    swbreak = 0,  // software breakpoint
-    hwbreak = 1,  // hardware breakpoint
-    watch   = 2,  // write  watchpoint
-    rwatch  = 3,  // read   watchpoint
-    awatch  = 4   // access watchpoint
+    swbreak   = 0,  // software breakpoint
+    hwbreak   = 1,  // hardware breakpoint
+    watch     = 2,  // write  watchpoint
+    rwatch    = 3,  // read   watchpoint
+    awatch    = 4,  // access watchpoint
+    replaylog = 5,  // reached replay log edge
+    none      = -1  // no reason is given
   } ptype_t;
 
   typedef int unsigned pkind_t;
@@ -374,10 +376,54 @@ package gdb_server_stub_pkg;
 
   // TODO: Send a exception packet "T <value>"
   function automatic int gdb_stop_reply (
-    input byte sig = dut.sig
+    // signal
+    input byte sig = dut.sig,
+    // register
+    input int unsigned idx = -1,
+    input [XLEN-1:0]   val = 'x,
+    // thread
+    input int thr = -1,
+    // core
+    input int unsigned core = -1,
+    // reason
+    input ptype_t reason = none,
+    input SIZE_T  adr = 0
   );
-    // reply with signal (current signal by default)
-    return(gdb_send_packet($sformatf("S%02h", sig)));
+    string str;
+    // reply with signal/register/thread/core/reason
+    str = $sformatf("T%02h;", sig);
+    // register
+    if (idx != -1) begin
+      case (XLEN)
+        32: str = {str, $sformatf("%0h:%08h;", idx, val)};
+        64: str = {str, $sformatf("%0h:%016h;", idx, val)};
+      endcase
+    end
+    // thread
+    if (thr != -1) begin
+      str = {str, $sformatf("thread:%s;", format_thread(1, thr))};
+    end
+    // core
+    if (core != -1) begin
+      str = {str, $sformatf("core:%h;", core)};
+    end
+    // reason
+    case (reason.name)
+      "watch", "rwatch", "awatch": begin
+        str = {str, $sformatf("%s:%h;", reason.name, adr)};
+      end
+      "swbreak", "hwbreak": begin
+        str = {str, $sformatf("%s:;", reason.name)};
+      end
+      "replaylog": begin
+        str = {str, $sformatf("%s:%s;", reason.name, dut.shd.cnt == 0 ? "begin" : "end")};
+      end
+    endcase
+    // remove the trailing semicolon
+    str = str.substr(0, str.len()-2);
+    return(gdb_send_packet(str));
+//    // reply with signal (current signal by default)
+//    return(gdb_send_packet($sformatf("S%02h", sig)));
   endfunction: gdb_stop_reply
 
   // send ERROR number reply (GDB only)
@@ -594,8 +640,8 @@ package gdb_server_stub_pkg;
     // query first thread info
     if (pkt == "qfThreadInfo") begin
       str = "m";
-      foreach (THREADS[thread]) begin
-        str = {str, format_thread(1, thread+1), ","};
+      foreach (THREADS[thr]) begin
+        str = {str, format_thread(1, thr+1), ","};
       end
       // remove the trailing comma
       str = str.substr(0, str.len()-2);
@@ -606,11 +652,23 @@ package gdb_server_stub_pkg;
       // last thread
       status = gdb_send_packet("l");
     end else
+    // query extra info for given thread
     if ($sscanf(pkt, "qThreadExtraInfo,%s", str) > 0) begin
-      int thread;
-      thread = sscan_thread(str);
-      $display("DEBUG: qThreadExtraInfo: str = %p, thread = %0d, THREADS[%0d-1] = %s", str, thread, thread, THREADS[thread-1]);
-      status = gdb_send_packet(gdb_ascii2hex(THREADS[thread-1]));
+      int thr;
+      thr = sscan_thread(str);
+      $display("DEBUG: qThreadExtraInfo: str = %p, thread = %0d, THREADS[%0d-1] = %s", str, thr, thr, THREADS[thr-1]);
+      status = gdb_send_packet(gdb_ascii2hex(THREADS[thr-1]));
+    end else
+    // query first thread info
+    if (pkt == "qC") begin
+      int thr = 1;
+      str = {"QC", format_thread(1, thr)};
+      status = gdb_send_packet(str);
+    end else
+    // query whether the remote server attached to an existing process or created a new process
+    if (pkt == "qAttached") begin
+      // respond as "attached"
+      status = gdb_send_packet("1");
     end else
     // not supported, send empty response packet
     begin
