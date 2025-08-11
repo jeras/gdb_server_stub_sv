@@ -17,47 +17,8 @@ package gdb_server_stub_pkg;
     // dynamic array of strings
     typedef string string_array_t [];
 
-    // byte dynamic array type for casting to/from string
-  //  typedef byte dictionary_t [SIZE_T];
-
-    // state
-    typedef enum byte {
-        SIGNONE = 8'd00,
-        // signals
-        SIGHUP  = 8'd01,  // Hangup
-        SIGINT  = 8'd02,  // Terminal interrupt signal
-        SIGQUIT = 8'd03,  // Terminal quit signal
-        SIGILL  = 8'd04,  // Illegal instruction
-        SIGTRAP = 8'd05,  // Trace/breakpoint trap
-        SIGABRT = 8'd06,  // Process abort signal
-        SIGEMT  = 8'd07,
-        SIGFPE  = 8'd08,  // Erroneous arithmetic operation
-        SIGKILL = 8'd09,  // Kill (cannot be caught or ignored)
-        SIGBUS  = 8'd10,
-        SIGSEGV = 8'd11,  // Invalid memory reference (address decoder error)
-        SIGSYS  = 8'd12,
-        SIGPIPE = 8'd13,  // Write on a pipe with no one to read it
-        SIGALRM = 8'd14,  // Alarm clock
-        SIGTERM = 8'd15   // Termination signal
-    } signal_t;
-
-    // point type
-    typedef enum int unsigned {
-        swbreak   = 0,  // software breakpoint
-        hwbreak   = 1,  // hardware breakpoint
-        watch     = 2,  // write  watchpoint
-        rwatch    = 3,  // read   watchpoint
-        awatch    = 4,  // access watchpoint
-        replaylog = 5,  // reached replay log edge
-        none      = -1  // no reason is given
-    } ptype_t;
-
-    typedef int unsigned pkind_t;
-
-    typedef struct packed {
-        ptype_t ptype;
-        pkind_t pkind;
-    } point_t;
+    // queue of strings
+    typedef string string_queue_t [$];
 
     virtual class gdb_server_stub #(
         // list of CPUs
@@ -138,13 +99,8 @@ package gdb_server_stub_pkg;
 
         typedef gdb_shadow_t::retired_t retired_t;
 
-        // DUT simulation state
-        typedef struct {
-            signal_t     sig;
-            gdb_shadow_t shd;
-        } dut_state_t;
-
-        dut_state_t dut;
+        // DUT shadow state
+        gdb_shadow_t shd;
 
     ////////////////////////////////////////
     // constructor
@@ -166,11 +122,7 @@ package gdb_server_stub_pkg;
             end
 
             // DUT shadow state initialization
-            // signal
-            dut.sig = SIGTRAP;
-            // shadow
-            dut.shd = new();
-
+            shd = new();
         endfunction: new
 
     ////////////////////////////////////////
@@ -357,6 +309,26 @@ package gdb_server_stub_pkg;
             return(str);
         endfunction: char2space
 
+        function automatic string_queue_t split (
+            input string str,
+            input byte   sep  // separator
+        );
+            string tmp;
+            // replace separator with space
+            str = char2space(str, sep);
+            while ($sscanf(str, "%s", tmp)) begin
+                // add element to list
+                split.push_back(tmp);
+                // remove element from string
+                if (str.len() > tmp.len()) begin
+                    // +1 to skip the space left by the ";" separator
+                    str = str.substr(tmp.len()+1, str.len()-1);
+                end else begin
+                    break;
+                end
+            end
+        endfunction: split
+
     ///////////////////////////////////////
     // GDB signal
     ///////////////////////////////////////
@@ -376,22 +348,17 @@ package gdb_server_stub_pkg;
 
         // TODO: Send a exception packet "T <value>"
         function automatic int gdb_stop_reply (
-            // signal
-            input byte sig = dut.sig,
             // register
             input int unsigned idx = -1,
             input [XLEN-1:0]   val = 'x,
             // thread
             input int thr = -1,
             // core
-            input int unsigned core = -1,
-            // reason
-            input ptype_t reason = none,
-            input SIZE_T  adr = 0
+            input int unsigned core = -1
         );
             string str;
             // reply with signal/register/thread/core/reason
-            str = $sformatf("T%02h;", sig);
+            str = $sformatf("T%02h;", shd.sig);
             // register
             if (idx != -1) begin
                 case (XLEN)
@@ -401,22 +368,22 @@ package gdb_server_stub_pkg;
             end
             // thread
             if (thr != -1) begin
-                str = {str, $sformatf("thread:%s;", format_thread(1, thr))};
+                str = {str, $sformatf("thread:%s;", sformat_thread(1, thr))};
             end
             // core
             if (core != -1) begin
                 str = {str, $sformatf("core:%h;", core)};
             end
             // reason
-            case (reason.name)
-                "watch", "rwatch", "awatch": begin
-                    str = {str, $sformatf("%s:%h;", reason.name, adr)};
+            case (shd.rsn.ptype)
+                watch, rwatch, awatch: begin
+                    str = {str, $sformatf("%s:%h;", shd.rsn.ptype.name, shd.ret.lsu.adr)};
                 end
-                "swbreak", "hwbreak": begin
-                    str = {str, $sformatf("%s:;", reason.name)};
+                swbreak, hwbreak: begin
+                    str = {str, $sformatf("%s:;", shd.rsn.ptype.name)};
                 end
-                "replaylog": begin
-                    str = {str, $sformatf("%s:%s;", reason.name, dut.shd.cnt == 0 ? "begin" : "end")};
+                replaylog: begin
+                    str = {str, $sformatf("%s:%s;", shd.rsn.ptype.name, shd.cnt == 0 ? "begin" : "end")};
                 end
             endcase
             // remove the trailing semicolon
@@ -522,7 +489,7 @@ package gdb_server_stub_pkg;
                 "reset assert": begin
                     dut_reset_assert;
                     // TODO: rethink whether to reset the shadow or keep it
-                    //dut.shd = new();
+                    //shd = new();
                     status = gdb_query_monitor_reply("DUT reset asserted.\n");
                 end
                 "reset release": begin
@@ -543,29 +510,23 @@ package gdb_server_stub_pkg;
         );
             int code;
             int status;
-            string tmp;
+            string_queue_t features;
             string feature;
             string value;
 
             // parse features supported by the GDB client
-            str = char2space(str, byte'(";"));
-            while ($sscanf(str, "%s", tmp)) begin
+            features = split(str, byte'(";"));
+            foreach (features[i]) begin
+                int unsigned len = features[i].len();
                 // add feature and its value (+/-/?)
-                value = string'(tmp[tmp.len()-1]);
+                value = string'(features[i][len-1]);
                 if (value inside {"+", "-", "?"}) begin
-                    feature = tmp.substr(0, tmp.len()-2);
+                    feature = features[i].substr(0, len-2);
                 end else begin
-                    tmp = char2space(tmp, byte'("="));
-                    code = $sscanf(str, "%s=%s", feature, value);
+                    features[i] = char2space(features[i], byte'("="));
+                    code = $sscanf(str, "%s %s", feature, value);
                 end
                 features_gdb[feature] = value;
-                // remove the processed feature from the string (unless it is already the last one)
-                if (str.len() > tmp.len()) begin
-                    // +1 to skip the space
-                    str = str.substr(tmp.len()+1, str.len()-1);
-                end else begin
-                    break;
-                end
             end
             $display("DEBUG: features_gdb = %p", features_gdb);
 
@@ -586,7 +547,7 @@ package gdb_server_stub_pkg;
         endfunction: gdb_query_supported
 
 
-        function automatic string format_thread (
+        function automatic string sformat_thread (
             input int process,
             input int thread
         );
@@ -594,7 +555,7 @@ package gdb_server_stub_pkg;
                 "+": return($sformatf("p%h,%h", process, thread));
                 "-": return($sformatf("%0h", thread));
             endcase
-        endfunction: format_thread
+        endfunction: sformat_thread
 
         function automatic int sscan_thread (
             input string str
@@ -641,7 +602,7 @@ package gdb_server_stub_pkg;
             if (pkt == "qfThreadInfo") begin
                 str = "m";
                 foreach (THREADS[thr]) begin
-                    str = {str, format_thread(1, thr+1), ","};
+                    str = {str, sformat_thread(1, thr+1), ","};
                 end
                 // remove the trailing comma
                 str = str.substr(0, str.len()-2);
@@ -662,7 +623,7 @@ package gdb_server_stub_pkg;
             // query first thread info
             if (pkt == "qC") begin
                 int thr = 1;
-                str = {"QC", format_thread(1, thr)};
+                str = {"QC", sformat_thread(1, thr)};
                 status = gdb_send_packet(str);
             end else
             // query whether the remote server attached to an existing process or created a new process
@@ -682,13 +643,41 @@ package gdb_server_stub_pkg;
 
         function automatic void gdb_verbose_packet ();
             string pkt;
+            string str;
+            string tmp;
             int status;
+            int code;
 
             // read packet
             status = gdb_get_packet(pkt);
 
+//          // interrupt signal
+//          if (pkt == "vCtrlC") begin
+//              shd.sig = SIGINT;
+//              status = gdb_send_packet("OK");
+//          end else
+            // list actions supported by the ‘vCont’ packet
+            if (pkt == "vCont?") begin
+                status = gdb_send_packet("vCont;c:C;s:S");
+            end else
+            // parse 'vcont' packet
+            if ($sscanf(pkt, "vCont;%s", str) > 0) begin
+                string_queue_t features;
+                string action;
+                string thread;
+                // parse action list
+                features = split(str, byte'(";"));
+                foreach (features[i]) begin
+                    // parse action/thread pair
+                    features[i] = char2space(features[i], byte'(":"));
+                    code = $sscanf(features[i], "%s %s", action, thread);
+                    // TODO
+                end
+            end else
             // not supported, send empty response packet
-            status = gdb_send_packet("");
+            begin
+                status = gdb_send_packet("");
+            end
         endfunction: gdb_verbose_packet
 
     ////////////////////////////////////////
@@ -727,7 +716,7 @@ package gdb_server_stub_pkg;
                 if (stub_state.memory) begin
                     val =     dut_mem_read(adr+i);
                 end else begin
-                    val = dut.shd.mem_read(adr+i, 1)[0];
+                    val = shd.mem_read(adr+i, 1)[0];
                 end
                 tmp = $sformatf("%02h", val);
                 pkt[i*2+0] = tmp[0];
@@ -782,7 +771,7 @@ package gdb_server_stub_pkg;
                 // TODO handle memory access errors
                 // NOTE: memory writes are always done to both DUT and shadow
                 void'(    dut_mem_write(adr+i,                 dat  ));
-                void'(dut.shd.mem_write(adr+i, byte_array_t'('{dat})));
+                void'(shd.mem_write(adr+i, byte_array_t'('{dat})));
             end
 
             // send response
@@ -821,7 +810,7 @@ package gdb_server_stub_pkg;
                 if (stub_state.memory) begin
                     pkt[i] =     dut_mem_read(adr+i);
                 end else begin
-                    pkt[i] = dut.shd.mem_read(adr+i, 1)[0];
+                    pkt[i] = shd.mem_read(adr+i, 1)[0];
                 end
             end
 
@@ -855,8 +844,8 @@ package gdb_server_stub_pkg;
             for (SIZE_T i=0; i<len; i++) begin
                 // TODO handle memory access errors
                 // NOTE: memory writes are always done to both DUT and shadow
-                void'(    dut_mem_write(adr+i,                 pkt[code+i]  ));
-                void'(dut.shd.mem_write(adr+i, byte_array_t'('{pkt[code+i]})));
+                void'(dut_mem_write(adr+i,                 pkt[code+i]  ));
+                void'(shd.mem_write(adr+i, byte_array_t'('{pkt[code+i]})));
             end
 
             // send response
@@ -884,7 +873,7 @@ package gdb_server_stub_pkg;
                 if (stub_state.register) begin
                     val = {<<8{dut_reg_read(i)}};
                 end else begin
-                    val = {<<8{dut.shd.reg_read(i)}};
+                    val = {<<8{shd.reg_read(i)}};
                 end
                 case (XLEN)
                     32: pkt = {pkt, $sformatf("%08h", val)};
@@ -922,7 +911,7 @@ package gdb_server_stub_pkg;
                 // swap byte order since they are sent LSB first
                 // NOTE: register writes are always done to both DUT and shadow
                 dut_reg_write(i, {<<8{val}});
-                dut.shd.reg_write(i, {<<8{val}});
+                shd.reg_write(i, {<<8{val}});
             end
 
             // send response
@@ -951,7 +940,7 @@ package gdb_server_stub_pkg;
             if (stub_state.register) begin
                 val = {<<8{dut_reg_read(idx)}};
             end else begin
-                val = {<<8{dut.shd.reg_read(idx)}};
+                val = {<<8{shd.reg_read(idx)}};
             end
             case (XLEN)
                 32: pkt = {pkt, $sformatf("%08h", val)};
@@ -986,7 +975,7 @@ package gdb_server_stub_pkg;
             // swap byte order since they are sent LSB first
             // NOTE: register writes are always done to both DUT and shadow
             dut_reg_write(idx, {<<8{val}});
-            dut.shd.reg_write(idx, {<<8{val}});
+            shd.reg_write(idx, {<<8{val}});
         //    case (XLEN)
         //        32: $display("DEBUG: GPR[%0d] <= 32'h%08h", idx, val);
         //        64: $display("DEBUG: GPR[%0d] <= 64'h%016h", idx, val);
@@ -1002,14 +991,11 @@ package gdb_server_stub_pkg;
     // GDB breakpoints/watchpoints
     ////////////////////////////////////////
 
-        // associative array for hardware breakpoints/watchpoint
-        point_t points [SIZE_T];
-
         function automatic int gdb_point_remove ();
             int status;
             string pkt;
             ptype_t ptype;
-            SIZE_T addr;
+            SIZE_T  addr;
             pkind_t pkind;
 
             // read packet
@@ -1025,18 +1011,7 @@ package gdb_server_stub_pkg;
             endcase
 `endif
 
-            case (ptype)
-                swbreak: begin
-                    // software breakpoints are not supported
-                    status = gdb_send_packet("");
-                end
-                default: begin
-                    // software breakpoints are not supported
-                    points.delete(addr);
-                    status = gdb_send_packet("OK");
-                end
-            endcase
-
+            void'(shd.point_remove(ptype, addr, pkind));
             return(1);
         endfunction: gdb_point_remove
 
@@ -1044,7 +1019,7 @@ package gdb_server_stub_pkg;
             int status;
             string pkt;
             ptype_t ptype;
-            SIZE_T addr;
+            SIZE_T  addr;
             pkind_t pkind;
 
             // read packet
@@ -1060,98 +1035,25 @@ package gdb_server_stub_pkg;
             endcase
 `endif
 
-            case (ptype)
-                swbreak: begin
-                    // software breakpoints are not supported
-                    status = gdb_send_packet("");
-                end
-                default: begin
-                    // software breakpoints are not supported
-                    points[addr] = '{ptype, pkind};
-                    status = gdb_send_packet("OK");
-                end
-            endcase
-
+            void'(shd.point_insert(ptype, addr, pkind));
             return(1);
         endfunction: gdb_point_insert
-
-    ////////////////////////////////////////
-    // GDB breakpoints/watchpoints matching (return value is the new state)
-    ////////////////////////////////////////
-
-        // this function is called from the SoC adapter and not from the packet parser
-        function automatic signal_t gdb_breakpoint_match (
-            input retired_t ret
-        );
-            int status;
-            signal_t tmp = dut.sig;
-            SIZE_T   adr = ret.ifu.adr;
-
-            // match illegal instruction
-            if (ret.ifu.ill) begin
-                tmp = SIGILL;
-                $display("DEBUG: Triggered illegal instruction at address %h.", adr);
-            end else
-            // match EBREAK/C.EBREAK instruction (software breakpoint)
-            // TODO: there are also explicit SW breakpoints that depend on ILEN
-            if ((ret.ifu.rdt[0:3] == '{8'h73, 8'h00, 8'h10, 8'h00}) ||  // 32'h00100073
-                (ret.ifu.rdt[0:1] == '{8'h02, 8'h90})) begin  // 16'h9002
-                tmp = SIGTRAP;
-                $display("DEBUG: Triggered SW breakpoint at address %h.", adr);
-            end else
-            // match hardware breakpoint
-            if (points.exists(adr)) begin
-                if (points[adr].ptype == hwbreak) begin
-                    tmp = SIGTRAP;
-                    $display("DEBUG: Triggered HW breakpoint at address %h.", adr);
-                end
-            end
-            return(tmp);
-        endfunction: gdb_breakpoint_match
-
-        // this function is called from the SoC adapter and not from the packet parser
-        function automatic signal_t gdb_watchpoint_match (
-            input retired_t ret
-        );
-            int status;
-            signal_t tmp = dut.sig;
-            SIZE_T   adr =       ret.lsu.adr;
-            bit      wen = $size(ret.lsu.wdt) > 0;
-
-            // match hardware breakpoint
-            if (points.exists(adr)) begin
-                if (((points[adr].ptype == watch ) && wen == 1'b1) ||
-                    ((points[adr].ptype == rwatch) && wen == 1'b0) ||
-                    ((points[adr].ptype == awatch) )) begin
-                    // TODO: check is transfer size matches
-                    tmp = SIGTRAP;
-                    $display("DEBUG: Triggered HW watchpoint at address %h.", adr);
-                end
-            end
-            return(tmp);
-        endfunction: gdb_watchpoint_match
 
     ///////////////////////////////////////
     // GDB step/continue
     ///////////////////////////////////////
 
         task gdb_forward_step;
-            int       status;
             retired_t ret;
 
             // record (if not in replay mode)
-            if (dut.shd.cnt == dut.shd.trc.size()-1) begin
+            if (shd.cnt == shd.trc.size()-1) begin
                 // perform DUT step
                 dut_step(ret);
-                dut.shd.trc.push_back(ret);
+                shd.trc.push_back(ret);
             end
             // handle shadow and trace
-            dut.shd.forward();
-
-            // breakpoint/watchpoint
-            // TODO: pass the event to the response
-            dut.sig = gdb_breakpoint_match(ret);
-            dut.sig = gdb_watchpoint_match(ret);
+            shd.forward();
         endtask: gdb_forward_step
 
         task gdb_step;
@@ -1168,12 +1070,12 @@ package gdb_server_stub_pkg;
             case (pkt[0])
                 "s": begin
                     status = $sscanf(pkt, "s%h", addr);
-            //        dut.sig = SIGNONE;
+            //        shd.sig = SIGNONE;
                     jmp = (status == 1);
                 end
                 "S": begin
                     status = $sscanf(pkt, "S%h;%h", sig, addr);
-                    dut.sig = signal_t'(sig);
+                    shd.sig = signal_t'(sig);
                     jmp = (status == 2);
                 end
             endcase
@@ -1185,7 +1087,7 @@ package gdb_server_stub_pkg;
             gdb_forward_step;
 
             // response packet
-            status = gdb_stop_reply(dut.sig);
+            status = gdb_stop_reply(shd.sig);
         endtask: gdb_step
 
         task gdb_continue ();
@@ -1203,12 +1105,12 @@ package gdb_server_stub_pkg;
             case (pkt[0])
                 "c": begin
                     status = $sscanf(pkt, "c%h", addr);
-                    dut.sig = SIGNONE;
+                    shd.sig = SIGNONE;
                     jmp = (status == 1);
                 end
                 "C": begin
                     status = $sscanf(pkt, "C%h;%h", sig, addr);
-                    dut.sig = signal_t'(sig);
+                    shd.sig = signal_t'(sig);
                     jmp = (status == 2);
                 end
             endcase
@@ -1228,17 +1130,17 @@ package gdb_server_stub_pkg;
                 end
                 // in case of Ctrl+C (character 0x03)
                 else if (ch[0] == SIGQUIT) begin
-                    dut.sig = SIGINT;
+                    shd.sig = SIGINT;
                     $display("DEBUG: Interrupt SIGQUIT (0x03) (Ctrl+c).");
                 end
                 // parse packet and loop back
                 else begin
                     gdb_packet(ch);
                 end
-            end while (dut.sig == SIGNONE);
+            end while (shd.sig == SIGNONE);
 
             // send response
-            status = gdb_stop_reply(dut.sig);
+            status = gdb_stop_reply(shd.sig);
         endtask: gdb_continue
 
     ////////////////////////////////////////
@@ -1247,26 +1149,21 @@ package gdb_server_stub_pkg;
 
         function void gdb_backward_step;
             // record (if not replay)
-            if (dut.shd.cnt == -1) begin
+            if (shd.cnt == -1) begin
                 // DUT is still somewhere in the reset sequence
                 // TODO: return some kind of error
-                dut.sig = SIGTRAP;
+                shd.sig = SIGTRAP;
                 return;
             end
-            else if (dut.shd.cnt == 0) begin
+            else if (shd.cnt == 0) begin
                 // already at the beginning of history, can't go further back
                 // TODO: maybe there is a better option than a trap, check what QEMU does
-                dut.sig = SIGTRAP;
+                shd.sig = SIGTRAP;
                 return;
             end else begin
                 // handle shadow and trace
-                dut.shd.backward();
+                shd.backward();
             end
-
-            // breakpoint/watchpoint
-            // TODO: pass the event to the response
-            dut.sig = gdb_breakpoint_match(dut.shd.trc[dut.shd.cnt]);
-            dut.sig = gdb_watchpoint_match(dut.shd.trc[dut.shd.cnt]);
         endfunction: gdb_backward_step
 
         task gdb_backward;
@@ -1281,13 +1178,13 @@ package gdb_server_stub_pkg;
             case (pkt[0:1])
                 "bs": begin
                     // backward step
-            //        dut.sig = SIGNONE;
+            //        shd.sig = SIGNONE;
                     gdb_backward_step;
                 end
                 "bc": begin
                     // backward continue
                     do begin
-                        dut.sig = SIGNONE;
+                        shd.sig = SIGNONE;
                         gdb_backward_step;
 
                         status = socket_recv(ch, MSG_PEEK | MSG_DONTWAIT);
@@ -1298,19 +1195,19 @@ package gdb_server_stub_pkg;
                         end
                         // in case of Ctrl+C (character 0x03)
                         else if (ch[0] == SIGQUIT) begin
-                            dut.sig = SIGINT;
+                            shd.sig = SIGINT;
                             $display("DEBUG: Interrupt SIGQUIT (0x03) (Ctrl+c).");
                         end
                         // parse packet and loop back
                         else begin
                             gdb_packet(ch);
                         end
-                    end while (dut.sig == SIGNONE);
+                    end while (shd.sig == SIGNONE);
                 end
             endcase
 
             // send response
-            status = gdb_stop_reply(dut.sig);
+            status = gdb_stop_reply(shd.sig);
         endtask: gdb_backward
 
     ////////////////////////////////////////
@@ -1360,7 +1257,7 @@ package gdb_server_stub_pkg;
             stub_state = STUB_STATE_INIT;
 
             // stop HDL simulation, so the HDL simulator can render waveforms
-            $info("GDB: detached, stopping simulation from within state %s.", dut.sig.name);
+            $info("GDB: detached, stopping simulation from within state %s.", shd.sig.name);
             $stop();
             // after user continues HDL simulation blocking wait for GDB client to reconnect
             $info("GDB: continuing stopped simulation, waiting for GDB to reconnect to.");

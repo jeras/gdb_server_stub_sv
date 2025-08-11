@@ -11,6 +11,40 @@ package gdb_shadow_pkg;
     // byte dynamic array type for casting to/from string
     typedef byte array_t [];
 
+    // signals
+    typedef enum byte {
+        SIGNONE = 8'd00,
+        // signals
+        SIGHUP  = 8'd01,  // Hangup
+        SIGINT  = 8'd02,  // Terminal interrupt signal
+        SIGQUIT = 8'd03,  // Terminal quit signal
+        SIGILL  = 8'd04,  // Illegal instruction
+        SIGTRAP = 8'd05,  // Trace/breakpoint trap
+        SIGABRT = 8'd06,  // Process abort signal
+        SIGEMT  = 8'd07,
+        SIGFPE  = 8'd08,  // Erroneous arithmetic operation
+        SIGKILL = 8'd09,  // Kill (cannot be caught or ignored)
+        SIGBUS  = 8'd10,
+        SIGSEGV = 8'd11,  // Invalid memory reference (address decoder error)
+        SIGSYS  = 8'd12,
+        SIGPIPE = 8'd13,  // Write on a pipe with no one to read it
+        SIGALRM = 8'd14,  // Alarm clock
+        SIGTERM = 8'd15   // Termination signal
+    } signal_t;
+
+    // point type
+    typedef enum int unsigned {
+        swbreak   = 0,  // software breakpoint
+        hwbreak   = 1,  // hardware breakpoint
+        watch     = 2,  // write  watchpoint
+        rwatch    = 3,  // read   watchpoint
+        awatch    = 4,  // access watchpoint
+        replaylog = 5,  // reached replay log edge
+        none      = -1  // no reason is given
+    } ptype_t;
+
+    typedef int unsigned pkind_t;
+
 ///////////////////////////////////////////////////////////////////////////////
 // GDB shadow class
 ///////////////////////////////////////////////////////////////////////////////
@@ -33,9 +67,9 @@ package gdb_shadow_pkg;
         // dictionary of array_t
         typedef array_t dictionary_t [SIZE_T];
 
-///////////////////////////////////////////////////////////////////////////////
-// retired instruction trace
-///////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////
+    // retired instruction trace
+    ////////////////////////////////////////
 
         // IFU (instruction fetch unit)
         typedef struct {
@@ -76,9 +110,18 @@ package gdb_shadow_pkg;
             retired_lsu_t lsu;
         } retired_t;
 
-///////////////////////////////////////////////////////////////////////////////
-// shadow state
-///////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////
+    // breakpoint/watchpoint
+    ////////////////////////////////////////
+
+        typedef struct packed {
+            ptype_t ptype;
+            pkind_t pkind;
+        } point_t;
+
+    ////////////////////////////////////////
+    // shadow state
+    ////////////////////////////////////////
 
         // registers
         logic [XLEN-1:0] gpr [0:GPRN-1];  // GPR (general purpose register file)
@@ -92,15 +135,28 @@ package gdb_shadow_pkg;
         // memory mapped I/O registers (covers address space not covered by memories)
         dictionary_t     i_o;
 
-        // trace queue
-        retired_t        trc [$];
-
         // instruction counter
         SIZE_T           cnt;
 
-///////////////////////////////////////////////////////////////////////////////
-// constructor
-///////////////////////////////////////////////////////////////////////////////
+        // trace queue
+        retired_t        trc [$];
+
+        // current retired instruction
+        retired_t        ret;
+
+        // signal
+        signal_t         sig;
+
+        // reason (point type/kind)
+        point_t          rsn;
+
+        // associative array for hardware breakpoints/watchpoint
+        point_t          bpt [SIZE_T];
+        point_t          wpt [SIZE_T];
+
+    ////////////////////////////////////////
+    // constructor
+    ////////////////////////////////////////
 
         // constructor
         function new ();
@@ -114,13 +170,17 @@ package gdb_shadow_pkg;
             i_o.delete();
             // initialize trace queue
             trc.delete();
-            // initialize counter (the counter points to no instruction)
+            // initialize counter (the counter pnt to no instruction)
             cnt = -1;
+            // signal
+            sig = SIGTRAP;
+            // reason
+            rsn = "";
         endfunction: new
 
-///////////////////////////////////////////////////////////////////////////////
-// register access
-///////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////
+    // register access
+    ////////////////////////////////////////
 
         // write register to shadow copy
         function void reg_write (
@@ -156,9 +216,9 @@ package gdb_shadow_pkg;
             end
         endfunction: reg_read
 
-///////////////////////////////////////////////////////////////////////////////
-// memory access
-///////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////
+    // memory access
+    ////////////////////////////////////////
 
         // read from shadow memory
         function automatic array_t mem_read (
@@ -201,9 +261,9 @@ package gdb_shadow_pkg;
             i_o[adr] = dat;
         endfunction: mem_write
 
-///////////////////////////////////////////////////////////////////////////////
-// update/record/replay/revert retired instruction to/from DUT shadow state
-///////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////
+    // update/record/replay/revert retired instruction to/from DUT shadow state
+    ////////////////////////////////////////
 
         // update the shadow with state experienced by retired instruction (GPR/PC are no affected)
         // for example CSR state changes and memory writes by a DMA
@@ -274,9 +334,9 @@ package gdb_shadow_pkg;
             mem_write(ret.lsu.adr, ret.lsu.rdt);
         endfunction: revert
 
-///////////////////////////////////////////////////////////////////////////////
-// forward/backward steps
-///////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////
+    // forward/backward steps
+    ////////////////////////////////////////
 
         function void forward ();
             $display("DEBUG: FORWARD: trc.size() = %0d, trc[%0d] = %p", trc.size(), cnt, trc[cnt-1]);
@@ -293,6 +353,10 @@ package gdb_shadow_pkg;
                 update(trc[cnt]);
                 record(trc[cnt]);
             end
+            // breakpoint/watchpoint
+            ret = trc[cnt];
+            breakpoint_match(ret);
+            watchpoint_match(ret);
         endfunction: forward
 
         function void backward ();
@@ -306,7 +370,104 @@ package gdb_shadow_pkg;
             // decrement retirement counter
             cnt--;
             $display("DEBUG: BACKWARD-O: trc.size() = %0d, trc[%0d] = %p", trc.size(), cnt, trc[cnt]);
+            // breakpoint/watchpoint
+            ret = trc[cnt];
+            breakpoint_match(ret);
+            watchpoint_match(ret);
         endfunction: backward
+
+    ////////////////////////////////////////
+    // GDB breakpoints/watchpoints insert/remove
+    ////////////////////////////////////////
+
+        function automatic int point_insert (
+            ptype_t ptype,
+            SIZE_T  addr,
+            pkind_t pkind
+        );
+            // insert breakpoint/watchpoint into dictionary
+            case (ptype)
+                swbreak, hwbreak: begin
+                    bpt[addr] = '{ptype, pkind};
+                    return(bpt.size);
+                end
+                watch, rwatch, awatch: begin
+                    wpt[addr] = '{ptype, pkind};
+                    return(wpt.size);
+                end
+            endcase
+        endfunction: point_insert
+
+        function automatic int point_remove (
+            ptype_t ptype,
+            SIZE_T  addr,
+            pkind_t pkind
+        );
+            case (ptype)
+                swbreak, hwbreak: begin
+                    bpt.delete(addr);
+                    return(bpt.size);
+                end
+                watch, rwatch, awatch: begin
+                    wpt.delete(addr);
+                    return(wpt.size);
+                end
+            endcase
+        endfunction: point_remove
+
+    ////////////////////////////////////////
+    // GDB breakpoints/watchpoints matching
+    ////////////////////////////////////////
+
+        function automatic void breakpoint_match (
+            input retired_t ret
+        );
+            SIZE_T   adr = ret.ifu.adr;
+
+            // match illegal instruction
+            if (ret.ifu.ill) begin
+                sig = SIGILL;
+                $display("DEBUG: Triggered illegal instruction at address %h.", adr);
+            end else
+            // match EBREAK/C.EBREAK instruction (software breakpoint)
+            // TODO: there are also explicit SW breakpoints that depend on ILEN
+            if ((ret.ifu.rdt[0:3] == '{8'h73, 8'h00, 8'h10, 8'h00}) ||  // 32'h00100073
+                (ret.ifu.rdt[0:1] == '{8'h02, 8'h90})) begin  // 16'h9002
+                sig = SIGTRAP;
+                $display("DEBUG: Triggered SW breakpoint at address %h.", adr);
+            end else
+            // match hardware breakpoint
+            if (bpt.exists(adr)) begin
+                if (bpt[adr].ptype == hwbreak) begin
+                    // signal
+                    sig = SIGTRAP;
+                    // reason
+                    rsn = bpt[adr];
+                    $display("DEBUG: Triggered HW breakpoint at address %h.", adr);
+                end
+            end
+        endfunction: breakpoint_match
+
+        function automatic void watchpoint_match (
+            input retired_t ret
+        );
+            SIZE_T   adr =       ret.lsu.adr;
+            bit      wen = $size(ret.lsu.wdt) > 0;
+
+            // match hardware breakpoint
+            if (wpt.exists(adr)) begin
+                if (((bpt[adr].ptype == watch ) && wen == 1'b1) ||
+                    ((bpt[adr].ptype == rwatch) && wen == 1'b0) ||
+                    ((bpt[adr].ptype == awatch) )) begin
+                    // TODO: check is transfer size matches
+                    // signal
+                    sig = SIGTRAP;
+                    // reason
+                    rsn = bpt[adr];
+                    $display("DEBUG: Triggered HW watchpoint at address %h.", adr);
+                end
+            end
+        endfunction: watchpoint_match
 
     endclass: gdb_shadow
 
