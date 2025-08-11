@@ -167,34 +167,34 @@ int socket_tcp_accept () {
 
 // close connection from client
 int socket_close () {
-  return close(cfd);
-  printf("DPI-C: Closed connection from client.");
+    return close(cfd);
+    printf("DPI-C: Closed connection from client.");
 }
 
 // transmitter
 int socket_send (const svOpenArrayHandle data, int flags) {
-  int status;
-  status = send(cfd, svGetArrayPtr(data), svSizeOfArray(data), flags);
-  if (status == -1) {
-    // https://en.wikipedia.org/wiki/Errno.h
-    printf("DPI-C: SEND failed with errno = %0d.\n", errno);
-    perror("DPI-C: socket send:");
-    return -1;
-  }
-  return status;
+    int status;
+    status = send(cfd, svGetArrayPtr(data), svSizeOfArray(data), flags);
+    if (status == -1) {
+        // https://en.wikipedia.org/wiki/Errno.h
+        printf("DPI-C: SEND failed with errno = %0d.\n", errno);
+        perror("DPI-C: socket send:");
+        return -1;
+    }
+    return status;
 }
 
 // receiver
 int socket_recv (const svOpenArrayHandle data, int flags) {
-  int status;
-  status = recv(cfd, svGetArrayPtr(data), svSizeOfArray(data), flags);
-  if (status == -1) {
-    // https://en.wikipedia.org/wiki/Errno.h
-    printf("DPI-C: RECV failed with errno = %0d.\n", errno);
-    perror("DPI-C: socket recv:");
-    return -1;
-  }
-  return status;
+    int status;
+    status = recv(cfd, svGetArrayPtr(data), svSizeOfArray(data), flags);
+    if (status == -1) {
+        // https://en.wikipedia.org/wiki/Errno.h
+        printf("DPI-C: RECV failed with errno = %0d.\n", errno);
+        perror("DPI-C: socket recv:");
+        return -1;
+    }
+    return status;
 }
 
 #ifdef __cplusplus

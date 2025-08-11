@@ -30,8 +30,8 @@ package gdb_shadow_pkg;
         parameter  MMAP_T       MMAP [0:MEMN-1] = '{default: '{base: 0, size: 256}}
     );
 
-    // dictionary of array_t
-    typedef array_t dictionary_t [SIZE_T];
+        // dictionary of array_t
+        typedef array_t dictionary_t [SIZE_T];
 
 ///////////////////////////////////////////////////////////////////////////////
 // retired instruction trace

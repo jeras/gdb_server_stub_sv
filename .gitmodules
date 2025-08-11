@@ -1,3 +1,9 @@
 [submodule "submodules/nerv"]
 	path = submodules/nerv
 	url = git@github.com:YosysHQ/nerv.git
+[submodule "submodules/riscv-helloworld-c"]
+	path = submodules/riscv-helloworld-c
+	url = git@github.com:chuckb/riscv-helloworld-c.git
+[submodule "submodules/qemu_arm_samples"]
+	path = submodules/qemu_arm_samples
+	url = git@github.com:dwelch67/qemu_arm_samples.git
