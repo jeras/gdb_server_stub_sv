@@ -162,20 +162,20 @@ package gdb_server_stub_pkg;
         );
 
     ////////////////////////////////////////
-    // GDB character get/put
+    // RSP character get/put
     ////////////////////////////////////////
 
-        function automatic void gdb_write (string str);
+        function automatic void rsp_write (string str);
             int status;
             byte buffer [] = new[str.len()](byte_array_t'(str));
             status = socket_send(buffer, 0);
-        endfunction: gdb_write
+        endfunction: rsp_write
 
     ////////////////////////////////////////
-    // GDB packet get/send
+    // RSP packet get/send
     ////////////////////////////////////////
 
-        function automatic int gdb_get_packet(
+        function automatic int rsp_get_packet(
             output string pkt,
             input  bit    ack = stub_state.acknowledge
         );
@@ -192,10 +192,10 @@ package gdb_server_stub_pkg;
             // TODO: error handling?
             do begin
                 status = socket_recv(buffer, 0);
-      //          $display("DEBUG: gdb_get_packet: buffer = %p", buffer);
+      //          $display("DEBUG: rsp_get_packet: buffer = %p", buffer);
                 str = {str, string'(buffer)};
                 len = str.len();
-      //          $display("DEBUG: gdb_get_packet: str = %s", str);
+      //          $display("DEBUG: rsp_get_packet: str = %s", str);
             end while (str[len-3] != "#");
 
             // extract packet data from received string
@@ -217,19 +217,19 @@ package gdb_server_stub_pkg;
                 $error("Bad checksum. Got 0x%s but was expecting: 0x%s for packet '%s'", checksum_ref, checksum_str, pkt);
                 if (ack) begin
                     // NACK packet
-                    gdb_write("-");
+                    rsp_write("-");
                 end
                 return (-1);
             end else begin
                 if (ack) begin
                     // ACK packet
-                    gdb_write("+");
+                    rsp_write("+");
                 end
                 return(0);
             end
-        endfunction: gdb_get_packet
+        endfunction: rsp_get_packet
 
-        function automatic int gdb_send_packet(
+        function automatic int rsp_send_packet(
             input string pkt,
             input bit    ack = stub_state.acknowledge
         );
@@ -242,19 +242,19 @@ package gdb_server_stub_pkg;
             end
 
             // Send packet start
-            gdb_write("$");
+            rsp_write("$");
 
             // Send packet data and calculate checksum
             foreach (pkt[i]) begin
                 checksum += pkt[i];
-                gdb_write(string'(pkt[i]));
+                rsp_write(string'(pkt[i]));
             end
 
             // Send packet end
-            gdb_write("#");
+            rsp_write("#");
 
             // Send the checksum
-            gdb_write($sformatf("%02h", checksum));
+            rsp_write($sformatf("%02h", checksum));
 
             // Check acknowledge
             if (ack) begin
@@ -262,13 +262,13 @@ package gdb_server_stub_pkg;
                 if (ch[0] == "+")  return(0);
                 else               return(-1);
             end
-        endfunction: gdb_send_packet
+        endfunction: rsp_send_packet
 
     ////////////////////////////////////////
     // hex encoding of ASCII data
     ////////////////////////////////////////
 
-        function automatic string gdb_hex2ascii (
+        function automatic string rsp_hex2ascii (
             input string hex
         );
             int code;
@@ -279,9 +279,9 @@ package gdb_server_stub_pkg;
                 code = $sscanf(hex.substr(2*i, 2*i+1), "%2h", ascii[i]);
             end
             return(ascii);
-        endfunction: gdb_hex2ascii
+        endfunction: rsp_hex2ascii
 
-        function automatic string gdb_ascii2hex (
+        function automatic string rsp_ascii2hex (
             input string ascii
         );
             int code;
@@ -295,7 +295,7 @@ package gdb_server_stub_pkg;
                 hex[i*2+1] = tmp[1];
             end
             return(hex);
-        endfunction: gdb_ascii2hex
+        endfunction: rsp_ascii2hex
 
         // SyetemVerilog uses spaces as separator for strings and GDB packets don't use spaces
         // replace separator characters with spaces
@@ -330,24 +330,24 @@ package gdb_server_stub_pkg;
         endfunction: split
 
     ///////////////////////////////////////
-    // GDB signal
+    // RSP signal
     ///////////////////////////////////////
 
         // in response to '?'
-        function automatic int gdb_signal();
+        function automatic int rsp_signal();
             string pkt;
             int status;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // reply with current signal
-            status = gdb_stop_reply();
+            status = rsp_stop_reply();
             return(status);
-        endfunction: gdb_signal
+        endfunction: rsp_signal
 
         // TODO: Send a exception packet "T <value>"
-        function automatic int gdb_stop_reply (
+        function automatic int rsp_stop_reply (
             // register
             input int unsigned idx = -1,
             input [XLEN-1:0]   val = 'x,
@@ -388,65 +388,65 @@ package gdb_server_stub_pkg;
             endcase
             // remove the trailing semicolon
             str = str.substr(0, str.len()-2);
-            return(gdb_send_packet(str));
+            return(rsp_send_packet(str));
         //    // reply with signal (current signal by default)
-        //    return(gdb_send_packet($sformatf("S%02h", sig)));
-        endfunction: gdb_stop_reply
+        //    return(rsp_send_packet($sformatf("S%02h", sig)));
+        endfunction: rsp_stop_reply
 
         // send ERROR number reply (GDB only)
         // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
-        function automatic int gdb_error_number_reply (
+        function automatic int rsp_error_number_reply (
             input byte val = 0
         );
-            return(gdb_send_packet($sformatf("E%02h", val)));
-        endfunction: gdb_error_number_reply
+            return(rsp_send_packet($sformatf("E%02h", val)));
+        endfunction: rsp_error_number_reply
 
         // send ERROR text reply (GDB only)
         // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
-        function automatic int gdb_error_text_reply (
+        function automatic int rsp_error_text_reply (
             input string str = ""
         );
-            return(gdb_send_packet($sformatf("E.%s", gdb_ascii2hex(str))));
-        endfunction: gdb_error_text_reply
+            return(rsp_send_packet($sformatf("E.%s", rsp_ascii2hex(str))));
+        endfunction: rsp_error_text_reply
 
         // send ERROR LLDB reply
         // https://lldb.llvm.org/resources/lldbgdbremote.html#qenableerrorstrings
-        function automatic int gdb_error_lldb_reply (
+        function automatic int rsp_error_lldb_reply (
             input byte   val = 0,
             input string str = ""
         );
-            return(gdb_send_packet($sformatf("E%02h;%s", val, gdb_ascii2hex(str))));
-        endfunction: gdb_error_lldb_reply
+            return(rsp_send_packet($sformatf("E%02h;%s", val, rsp_ascii2hex(str))));
+        endfunction: rsp_error_lldb_reply
 
         // send message to GDB console output
-        function automatic int gdb_console_output (
+        function automatic int rsp_console_output (
             input string str
         );
-            return(gdb_send_packet($sformatf("O%s", gdb_ascii2hex(str))));
-        endfunction: gdb_console_output
+            return(rsp_send_packet($sformatf("O%s", rsp_ascii2hex(str))));
+        endfunction: rsp_console_output
 
     ///////////////////////////////////////
-    // GDB query (monitor, )
+    // RSP query (monitor, )
     ///////////////////////////////////////
 
         // send message to GDB console output
-        function automatic int gdb_query_monitor_reply (
+        function automatic int rsp_query_monitor_reply (
             input string str
         );
-            return(gdb_send_packet($sformatf("%s", gdb_ascii2hex(str))));
-        endfunction: gdb_query_monitor_reply
+            return(rsp_send_packet($sformatf("%s", rsp_ascii2hex(str))));
+        endfunction: rsp_query_monitor_reply
 
         // GDB monitor commands
         // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Server.html
         // https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html#General-Query-Packets
-        task gdb_query_monitor (
+        task rsp_query_monitor (
             input string str
         );
             int status;
 
             case (str)
                 "help": begin
-                    status = gdb_query_monitor_reply({"HELP: Available monitor commands:\n",
+                    status = rsp_query_monitor_reply({"HELP: Available monitor commands:\n",
                                                       "* 'set remote log on/off',\n",
                                                       "* 'set waveform dump on/off',\n",
                                                       "* 'set register=dut/shadow' (reading registers from dut/shadow, default is shadow),\n",
@@ -456,56 +456,56 @@ package gdb_server_stub_pkg;
                 end
                 "set remote log on": begin
                     stub_state.remote_log = 1'b1;
-                    status = gdb_query_monitor_reply("Enabled remote logging to STDOUT.\n");
+                    status = rsp_query_monitor_reply("Enabled remote logging to STDOUT.\n");
                 end
                 "set remote log off": begin
                     stub_state.remote_log = 1'b0;
-                    status = gdb_query_monitor_reply("Disabled remote logging.\n");
+                    status = rsp_query_monitor_reply("Disabled remote logging.\n");
                 end
                 "set waveform dump on": begin
                     $dumpon;
-                    status = gdb_query_monitor_reply("Enabled waveform dumping.\n");
+                    status = rsp_query_monitor_reply("Enabled waveform dumping.\n");
                 end
                 "set waveform dump off": begin
                     $dumpoff;
-                    status = gdb_query_monitor_reply("Disabled waveform dumping.\n");
+                    status = rsp_query_monitor_reply("Disabled waveform dumping.\n");
                 end
                 "set register=dut": begin
                     stub_state.register = 1'b1;
-                    status = gdb_query_monitor_reply("Reading registers directly from DUT.\n");
+                    status = rsp_query_monitor_reply("Reading registers directly from DUT.\n");
                 end
                 "set register=shadow": begin
                     stub_state.register = 1'b0;
-                    status = gdb_query_monitor_reply("Reading registers from shadow copy.\n");
+                    status = rsp_query_monitor_reply("Reading registers from shadow copy.\n");
                 end
                 "set memory=dut": begin
                     stub_state.memory = 1'b1;
-                    status = gdb_query_monitor_reply("Reading memory directly from DUT.\n");
+                    status = rsp_query_monitor_reply("Reading memory directly from DUT.\n");
                 end
                 "set memory=shadow": begin
                     stub_state.memory = 1'b0;
-                    status = gdb_query_monitor_reply("Reading memory from shadow copy.\n");
+                    status = rsp_query_monitor_reply("Reading memory from shadow copy.\n");
                 end
                 "reset assert": begin
                     dut_reset_assert;
                     // TODO: rethink whether to reset the shadow or keep it
                     //shd = new();
-                    status = gdb_query_monitor_reply("DUT reset asserted.\n");
+                    status = rsp_query_monitor_reply("DUT reset asserted.\n");
                 end
                 "reset release": begin
                     dut_reset_release;
-                    status = gdb_query_monitor_reply("DUT reset released.\n");
+                    status = rsp_query_monitor_reply("DUT reset released.\n");
                 end
                 default begin
-                    status = gdb_query_monitor_reply("'monitor' command was not recognized.\n");
+                    status = rsp_query_monitor_reply("'monitor' command was not recognized.\n");
                 end
             endcase
-        endtask: gdb_query_monitor
+        endtask: rsp_query_monitor
 
         // GDB supported features
         // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Server.html
         // https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html#General-Query-Packets
-        function automatic bit gdb_query_supported (
+        function automatic bit rsp_query_supported (
             input string str
         );
             int code;
@@ -541,10 +541,10 @@ package gdb_server_stub_pkg;
             end
             // remove the trailing semicolon
             str = str.substr(0, str.len()-2);
-            status = gdb_send_packet(str);
+            status = rsp_send_packet(str);
 
             return(0);
-        endfunction: gdb_query_supported
+        endfunction: rsp_query_supported
 
 
         function automatic string sformat_thread (
@@ -571,31 +571,31 @@ package gdb_server_stub_pkg;
         endfunction: sscan_thread
 
 
-        task gdb_query_packet ();
+        task rsp_query_packet ();
             string pkt;
             string str;
             int status;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // parse various query packets
             if ($sscanf(pkt, "qSupported:%s", str) > 0) begin
                 $display("DEBUG: qSupported = %p", str);
-                status = gdb_query_supported(str);
+                status = rsp_query_supported(str);
             end else
             // parse various monitor packets
             if ($sscanf(pkt, "qRcmd,%s", str) > 0) begin
-                gdb_query_monitor(gdb_hex2ascii(str));
+                rsp_query_monitor(rsp_hex2ascii(str));
             end else
             // start no acknowledge mode
             if (pkt == "QStartNoAckMode") begin
-                status = gdb_send_packet("OK");
+                status = rsp_send_packet("OK");
                 stub_state.acknowledge = 1'b0;
             end else
             // start no acknowledge mode
             if (pkt == "QEnableErrorStrings") begin
-                status = gdb_send_packet("OK");
+                status = rsp_send_packet("OK");
                 stub_state.acknowledge = 1'b0;
             end else
             // query first thread info
@@ -606,42 +606,42 @@ package gdb_server_stub_pkg;
                 end
                 // remove the trailing comma
                 str = str.substr(0, str.len()-2);
-                status = gdb_send_packet(str);
+                status = rsp_send_packet(str);
             end else
             // query subsequent thread info
             if (pkt == "qsThreadInfo") begin
                 // last thread
-                status = gdb_send_packet("l");
+                status = rsp_send_packet("l");
             end else
             // query extra info for given thread
             if ($sscanf(pkt, "qThreadExtraInfo,%s", str) > 0) begin
                 int thr;
                 thr = sscan_thread(str);
                 $display("DEBUG: qThreadExtraInfo: str = %p, thread = %0d, THREADS[%0d-1] = %s", str, thr, thr, THREADS[thr-1]);
-                status = gdb_send_packet(gdb_ascii2hex(THREADS[thr-1]));
+                status = rsp_send_packet(rsp_ascii2hex(THREADS[thr-1]));
             end else
             // query first thread info
             if (pkt == "qC") begin
                 int thr = 1;
                 str = {"QC", sformat_thread(1, thr)};
-                status = gdb_send_packet(str);
+                status = rsp_send_packet(str);
             end else
             // query whether the remote server attached to an existing process or created a new process
             if (pkt == "qAttached") begin
                 // respond as "attached"
-                status = gdb_send_packet("1");
+                status = rsp_send_packet("1");
             end else
             // not supported, send empty response packet
             begin
-                status = gdb_send_packet("");
+                status = rsp_send_packet("");
             end
-        endtask: gdb_query_packet
+        endtask: rsp_query_packet
 
     ////////////////////////////////////////
-    // GDB verbose
+    // RSP verbose
     ////////////////////////////////////////
 
-        function automatic void gdb_verbose_packet ();
+        function automatic void rsp_verbose_packet ();
             string pkt;
             string str;
             string tmp;
@@ -649,16 +649,16 @@ package gdb_server_stub_pkg;
             int code;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
 //          // interrupt signal
 //          if (pkt == "vCtrlC") begin
 //              shd.sig = SIGINT;
-//              status = gdb_send_packet("OK");
+//              status = rsp_send_packet("OK");
 //          end else
             // list actions supported by the ‘vCont’ packet
             if (pkt == "vCont?") begin
-                status = gdb_send_packet("vCont;c:C;s:S");
+                status = rsp_send_packet("vCont;c:C;s:S");
             end else
             // parse 'vcont' packet
             if ($sscanf(pkt, "vCont;%s", str) > 0) begin
@@ -676,15 +676,15 @@ package gdb_server_stub_pkg;
             end else
             // not supported, send empty response packet
             begin
-                status = gdb_send_packet("");
+                status = rsp_send_packet("");
             end
-        endfunction: gdb_verbose_packet
+        endfunction: rsp_verbose_packet
 
     ////////////////////////////////////////
-    // GDB memory access (hexadecimal)
+    // RSP memory access (hexadecimal)
     ////////////////////////////////////////
 
-        function automatic int gdb_mem_read ();
+        function automatic int rsp_mem_read ();
             int code;
             string pkt;
             int status;
@@ -693,9 +693,9 @@ package gdb_server_stub_pkg;
             byte val;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
-        //    $display("DBG: gdb_mem_read: pkt = %s", pkt);
+        //    $display("DBG: rsp_mem_read: pkt = %s", pkt);
 
             // memory address and length
 `ifdef VERILATOR
@@ -707,7 +707,7 @@ package gdb_server_stub_pkg;
             endcase
 `endif
 
-        //    $display("DBG: gdb_mem_read: adr = %08x, len=%08x", adr, len);
+        //    $display("DBG: rsp_mem_read: adr = %08x, len=%08x", adr, len);
 
             // read memory
             pkt = {len{"XX"}};
@@ -723,15 +723,15 @@ package gdb_server_stub_pkg;
                 pkt[i*2+1] = tmp[1];
             end
 
-        //    $display("DBG: gdb_mem_read: pkt = %s", pkt);
+        //    $display("DBG: rsp_mem_read: pkt = %s", pkt);
 
             // send response
-            status = gdb_send_packet(pkt);
+            status = rsp_send_packet(pkt);
 
             return(len);
-        endfunction: gdb_mem_read
+        endfunction: rsp_mem_read
 
-        function automatic int gdb_mem_write ();
+        function automatic int rsp_mem_write ();
             int code;
             string pkt;
             string str;
@@ -741,8 +741,8 @@ package gdb_server_stub_pkg;
             byte   dat;
 
             // read packet
-            status = gdb_get_packet(pkt);
-        //    $display("DBG: gdb_mem_write: pkt = %s", pkt);
+            status = rsp_get_packet(pkt);
+        //    $display("DBG: rsp_mem_write: pkt = %s", pkt);
 
             // memory address and length
 `ifdef VERILATOR
@@ -753,21 +753,21 @@ package gdb_server_stub_pkg;
                 64: code = $sscanf(pkt, "M%16h,%16h:", adr, len);
             endcase
 `endif
-            //    $display("DBG: gdb_mem_write: adr = 'h%08h, len = 'd%0d", adr, len);
+            //    $display("DBG: rsp_mem_write: adr = 'h%08h, len = 'd%0d", adr, len);
 
                 // remove the header from the packet, only data remains
                 str = pkt.substr(pkt.len() - 2*len, pkt.len() - 1);
-            //    $display("DBG: gdb_mem_write: str = %s", str);
+            //    $display("DBG: rsp_mem_write: str = %s", str);
 
             // write memory
             for (SIZE_T i=0; i<len; i++) begin
-            //    $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, dut_mem_read(adr+i));
+            //    $display("DBG: rsp_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, dut_mem_read(adr+i));
 `ifdef VERILATOR
                 status = $sscanf(str.substr(i*2, i*2+1), "%2h", dat);
 `else
                 status = $sscanf(str.substr(i*2, i*2+1), "%h", dat);
 `endif
-            //    $display("DBG: gdb_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, dut_mem_read(adr+i));
+            //    $display("DBG: rsp_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, dut_mem_read(adr+i));
                 // TODO handle memory access errors
                 // NOTE: memory writes are always done to both DUT and shadow
                 void'(    dut_mem_write(adr+i,                 dat  ));
@@ -775,16 +775,16 @@ package gdb_server_stub_pkg;
             end
 
             // send response
-            status = gdb_send_packet("OK");
+            status = rsp_send_packet("OK");
 
             return(len);
-        endfunction: gdb_mem_write
+        endfunction: rsp_mem_write
 
-///////////////////////////////////////////////////////////////////////////////
-// GDB memory access (binary)
-///////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////
+    // RSP memory access (binary)
+    ////////////////////////////////////////
 
-        function automatic int gdb_mem_bin_read ();
+        function automatic int rsp_mem_bin_read ();
             int code;
             string pkt;
             int status;
@@ -792,7 +792,7 @@ package gdb_server_stub_pkg;
             SIZE_T len;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // memory address and length
 `ifdef VERILATOR
@@ -815,12 +815,12 @@ package gdb_server_stub_pkg;
             end
 
             // send response
-            status = gdb_send_packet(pkt);
+            status = rsp_send_packet(pkt);
 
             return(len);
-        endfunction: gdb_mem_bin_read
+        endfunction: rsp_mem_bin_read
 
-        function automatic int gdb_mem_bin_write ();
+        function automatic int rsp_mem_bin_write ();
             int code;
             string pkt;
             int status;
@@ -828,7 +828,7 @@ package gdb_server_stub_pkg;
             SIZE_T len;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // memory address and length
 `ifdef VERILATOR
@@ -849,23 +849,23 @@ package gdb_server_stub_pkg;
             end
 
             // send response
-            status = gdb_send_packet("OK");
+            status = rsp_send_packet("OK");
 
             return(len);
-        endfunction: gdb_mem_bin_write
+        endfunction: rsp_mem_bin_write
 
     ////////////////////////////////////////
-    // GDB multiple register access
+    // RSP multiple register access
     ////////////////////////////////////////
 
         // "g" packet
-        function automatic int gdb_reg_readall ();
+        function automatic int rsp_reg_readall ();
             int status;
             string pkt;
             logic [XLEN-1:0] val;  // 4-state so GDB can iterpret 'x
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             pkt = "";
             for (int unsigned i=0; i<REGN; i++) begin
@@ -882,19 +882,19 @@ package gdb_server_stub_pkg;
             end
 
             // send response
-            status = gdb_send_packet(pkt);
+            status = rsp_send_packet(pkt);
 
             return(0);
-        endfunction: gdb_reg_readall
+        endfunction: rsp_reg_readall
 
-        function automatic int gdb_reg_writeall ();
+        function automatic int rsp_reg_writeall ();
             string pkt;
             int status;
             int unsigned len = XLEN/8*2;
             bit [XLEN-1:0] val;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
             // remove command
             pkt = pkt.substr(1, pkt.len()-1);
 
@@ -915,23 +915,23 @@ package gdb_server_stub_pkg;
             end
 
             // send response
-            status = gdb_send_packet("OK");
+            status = rsp_send_packet("OK");
 
             return(0);
-        endfunction: gdb_reg_writeall
+        endfunction: rsp_reg_writeall
 
     ////////////////////////////////////////
-    // GDB single register access
+    // RSP single register access
     ////////////////////////////////////////
 
-        function automatic int gdb_reg_readone ();
+        function automatic int rsp_reg_readone ();
             int status;
             string pkt;
             int unsigned idx;
             logic [XLEN-1:0] val;  // 4-state so GDB can iterpret 'x
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // register index
             status = $sscanf(pkt, "p%h", idx);
@@ -948,19 +948,19 @@ package gdb_server_stub_pkg;
             endcase
 
             // send response
-            status = gdb_send_packet(pkt);
+            status = rsp_send_packet(pkt);
 
             return(1);
-        endfunction: gdb_reg_readone
+        endfunction: rsp_reg_readone
 
-        function automatic int gdb_reg_writeone ();
+        function automatic int rsp_reg_writeone ();
             int status;
             string pkt;
             int unsigned idx;
             bit [XLEN-1:0] val;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // register index and value
 `ifdef VERILATOR
@@ -982,16 +982,16 @@ package gdb_server_stub_pkg;
         //    endcase
 
             // send response
-            status = gdb_send_packet("OK");
+            status = rsp_send_packet("OK");
 
             return(1);
-        endfunction: gdb_reg_writeone
+        endfunction: rsp_reg_writeone
 
     ////////////////////////////////////////
-    // GDB breakpoints/watchpoints
+    // RSP breakpoints/watchpoints
     ////////////////////////////////////////
 
-        function automatic int gdb_point_remove ();
+        function automatic int rsp_point_remove ();
             int status;
             string pkt;
             ptype_t ptype;
@@ -999,7 +999,7 @@ package gdb_server_stub_pkg;
             pkind_t pkind;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // breakpoint/watchpoint
 `ifdef VERILATOR
@@ -1013,9 +1013,9 @@ package gdb_server_stub_pkg;
 
             void'(shd.point_remove(ptype, addr, pkind));
             return(1);
-        endfunction: gdb_point_remove
+        endfunction: rsp_point_remove
 
-        function automatic int gdb_point_insert ();
+        function automatic int rsp_point_insert ();
             int status;
             string pkt;
             ptype_t ptype;
@@ -1023,7 +1023,7 @@ package gdb_server_stub_pkg;
             pkind_t pkind;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // breakpoint/watchpoint
 `ifdef VERILATOR
@@ -1037,13 +1037,13 @@ package gdb_server_stub_pkg;
 
             void'(shd.point_insert(ptype, addr, pkind));
             return(1);
-        endfunction: gdb_point_insert
+        endfunction: rsp_point_insert
 
     ///////////////////////////////////////
-    // GDB step/continue
+    // RSP step/continue
     ///////////////////////////////////////
 
-        task gdb_forward_step;
+        task rsp_forward_step;
             retired_t ret;
 
             // record (if not in replay mode)
@@ -1054,9 +1054,9 @@ package gdb_server_stub_pkg;
             end
             // handle shadow and trace
             shd.forward();
-        endtask: gdb_forward_step
+        endtask: rsp_forward_step
 
-        task gdb_step;
+        task rsp_step;
             int       status;
             string    pkt;
             SIZE_T    addr;
@@ -1064,7 +1064,7 @@ package gdb_server_stub_pkg;
             bit       jmp;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // signal/address
             case (pkt[0])
@@ -1084,13 +1084,13 @@ package gdb_server_stub_pkg;
             //dut_jump(addr);
 
             // forward step
-            gdb_forward_step;
+            rsp_forward_step;
 
             // response packet
-            status = gdb_stop_reply(shd.sig);
-        endtask: gdb_step
+            status = rsp_stop_reply(shd.sig);
+        endtask: rsp_step
 
-        task gdb_continue ();
+        task rsp_continue ();
             byte ch [] = new[1];
             int status;
             string pkt;
@@ -1099,7 +1099,7 @@ package gdb_server_stub_pkg;
             bit    jmp;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // signal/address
             case (pkt[0])
@@ -1120,7 +1120,7 @@ package gdb_server_stub_pkg;
 
             // step forward
             do begin
-                gdb_forward_step;
+                rsp_forward_step;
 
                 status = socket_recv(ch, MSG_PEEK | MSG_DONTWAIT);
 
@@ -1135,19 +1135,19 @@ package gdb_server_stub_pkg;
                 end
                 // parse packet and loop back
                 else begin
-                    gdb_packet(ch);
+                    rsp_packet(ch);
                 end
             end while (shd.sig == SIGNONE);
 
             // send response
-            status = gdb_stop_reply(shd.sig);
-        endtask: gdb_continue
+            status = rsp_stop_reply(shd.sig);
+        endtask: rsp_continue
 
     ////////////////////////////////////////
-    // GDB reverse step/continue
+    // RSP reverse step/continue
     ////////////////////////////////////////
 
-        function void gdb_backward_step;
+        function void rsp_backward_step;
             // record (if not replay)
             if (shd.cnt == -1) begin
                 // DUT is still somewhere in the reset sequence
@@ -1164,28 +1164,28 @@ package gdb_server_stub_pkg;
                 // handle shadow and trace
                 shd.backward();
             end
-        endfunction: gdb_backward_step
+        endfunction: rsp_backward_step
 
-        task gdb_backward;
+        task rsp_backward;
             byte ch [] = new[1];
             int status;
             string pkt;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // signal/address
             case (pkt[0:1])
                 "bs": begin
                     // backward step
             //        shd.sig = SIGNONE;
-                    gdb_backward_step;
+                    rsp_backward_step;
                 end
                 "bc": begin
                     // backward continue
                     do begin
                         shd.sig = SIGNONE;
-                        gdb_backward_step;
+                        rsp_backward_step;
 
                         status = socket_recv(ch, MSG_PEEK | MSG_DONTWAIT);
 
@@ -1200,58 +1200,58 @@ package gdb_server_stub_pkg;
                         end
                         // parse packet and loop back
                         else begin
-                            gdb_packet(ch);
+                            rsp_packet(ch);
                         end
                     end while (shd.sig == SIGNONE);
                 end
             endcase
 
             // send response
-            status = gdb_stop_reply(shd.sig);
-        endtask: gdb_backward
+            status = rsp_stop_reply(shd.sig);
+        endtask: rsp_backward
 
     ////////////////////////////////////////
-    // GDB extended/reset/detach/kill
+    // RSP extended/reset/detach/kill
     ////////////////////////////////////////
 
-        function automatic int gdb_extended ();
+        function automatic int rsp_extended ();
             int status;
             string pkt;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // set extended mode
             stub_state.extended = 1'b1;
 
             // send response
-            status = gdb_send_packet("OK");
+            status = rsp_send_packet("OK");
 
             return(0);
-        endfunction: gdb_extended
+        endfunction: rsp_extended
 
-        task gdb_reset ();
+        task rsp_reset ();
             int status;
             string pkt;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // perform RESET sequence
             dut_reset_assert();
 
             // do not send packet response here
-        endtask: gdb_reset
+        endtask: rsp_reset
 
-        function automatic int gdb_detach ();
+        function automatic int rsp_detach ();
             int status;
             string pkt;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // send response (GDB cliend will close the socket connection)
-            status = gdb_send_packet("OK");
+            status = rsp_send_packet("OK");
 
             // re-initialize stub state
             stub_state = STUB_STATE_INIT;
@@ -1269,27 +1269,27 @@ package gdb_server_stub_pkg;
             end
 
             return(0);
-        endfunction: gdb_detach
+        endfunction: rsp_detach
 
-        function automatic int gdb_kill ();
+        function automatic int rsp_kill ();
             int status;
             string pkt;
 
             // read packet
-            status = gdb_get_packet(pkt);
+            status = rsp_get_packet(pkt);
 
             // finish simulation
             $finish();
 
             // do not send packet response here
             return(0);
-        endfunction: gdb_kill
+        endfunction: rsp_kill
 
     ////////////////////////////////////////
-    // GDB packet
+    // RSP packet
     ////////////////////////////////////////
 
-        task automatic gdb_packet (
+        task automatic rsp_packet (
             input byte ch []
         );
             static byte bf [] = new[2];
@@ -1304,42 +1304,42 @@ package gdb_server_stub_pkg;
                 status = socket_recv(bf, MSG_PEEK);
                 // parse command
                 case (bf[1])
-            //        "x": status = gdb_mem_bin_read();
-            //        "X": status = gdb_mem_bin_write();
-                    "m": status = gdb_mem_read();
-                    "M": status = gdb_mem_write();
-                    "g": status = gdb_reg_readall();
-                    "G": status = gdb_reg_writeall();
-                    "p": status = gdb_reg_readone();
-                    "P": status = gdb_reg_writeone();
+            //        "x": status = rsp_mem_bin_read();
+            //        "X": status = rsp_mem_bin_write();
+                    "m": status = rsp_mem_read();
+                    "M": status = rsp_mem_write();
+                    "g": status = rsp_reg_readall();
+                    "G": status = rsp_reg_writeall();
+                    "p": status = rsp_reg_readone();
+                    "P": status = rsp_reg_writeone();
                     "s",
-                    "S":          gdb_step();
+                    "S":          rsp_step();
                     "c",
-                    "C":          gdb_continue();
-                    "b":          gdb_backward();
-                    "?": status = gdb_signal();
+                    "C":          rsp_continue();
+                    "b":          rsp_backward();
+                    "?": status = rsp_signal();
                     "Q",
-                    "q":          gdb_query_packet();
-            //        "q": status = gdb_query_packet();
-                    "v":          gdb_verbose_packet();
-                    "z": status = gdb_point_remove();
-                    "Z": status = gdb_point_insert();
-                    "!": status = gdb_extended();
-                    "R":          gdb_reset();
-                    "D": status = gdb_detach();
-                    "k": status = gdb_kill();
+                    "q":          rsp_query_packet();
+            //        "q": status = rsp_query_packet();
+                    "v":          rsp_verbose_packet();
+                    "z": status = rsp_point_remove();
+                    "Z": status = rsp_point_insert();
+                    "!": status = rsp_extended();
+                    "R":          rsp_reset();
+                    "D": status = rsp_detach();
+                    "k": status = rsp_kill();
                     default: begin
                         string pkt;
                         // read packet
-                        status = gdb_get_packet(pkt);
+                        status = rsp_get_packet(pkt);
                         // for unsupported commands respond with empty packet
-                        status = gdb_send_packet("");
+                        status = rsp_send_packet("");
                     end
                 endcase
             end else begin
                 $error("Unexpected sequence from degugger %p = \"%s\".", ch, ch);
             end
-        endtask: gdb_packet
+        endtask: rsp_packet
 
     ////////////////////////////////////////
     // GDB state machine
@@ -1353,7 +1353,7 @@ package gdb_server_stub_pkg;
                 // blocking socket read
                 status = socket_recv(ch, MSG_PEEK);
                 // parse packet and loop back
-                gdb_packet(ch);
+                rsp_packet(ch);
             end
         endtask: gdb_fsm
 
