@@ -45,7 +45,7 @@ package gdb_server_stub_pkg;
 
         typedef struct {
             shortint unsigned socket_port;
-            bit remote_log;    // debug log mode
+            bit remote_log;   // debug log mode
             bit acknowledge;  // acknowledge mode
             bit extended;     // extended remote mode
             bit register;     // read registers from (0-shadow, 1-DUT)
@@ -67,8 +67,8 @@ package gdb_server_stub_pkg;
         // supported features
         string features_gdb  [string];
         string features_stub [string] = '{
-            "swbreak"            : "+",  // TODO: actually add it to reply
-            "hwbreak"            : "+",  // TODO: actually add it to reply
+            "swbreak"            : "+",
+            "hwbreak"            : "+",
             "error-message"      : "+",  // GDB (LLDB asks with QEnableErrorStrings)
             "binary-upload"      : "-",  // TODO: for now it is broken
             "multiprocess"       : "-",
