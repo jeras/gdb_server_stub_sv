@@ -36,21 +36,21 @@ int cfd;
 int socket_unix_listen(const char* name) {
     struct sockaddr_un server;
 
-    printf("DPI-C: Creating UNIX socket %s\n", name);
+    vpi_printf("DPI-C: Creating UNIX socket %s\n", name);
     // check file name length
     if (strlen(name) == 0 || strlen(name) > sizeof(server.sun_path)-1) {
-        printf("DPI-C: Server UNIX socket path too long: %s\n", name);
+        vpi_printf("DPI-C: Server UNIX socket path too long: %s\n", name);
         return -1;
     }
 
     // delete UNIX socket file if it exists
     if (remove(name) == -1 && errno != ENOENT) {
-        printf("DPI-C: Failed to remove UNIX socket file %s\n", name);
+        vpi_printf("DPI-C: Failed to remove UNIX socket file %s\n", name);
     }
 
     // create UNIX socket file descriptor
     sfd = socket(AF_UNIX, SOCK_STREAM, 0);
-    printf("DPI-C: UNIX socket fd = %d\n", sfd);
+    vpi_printf("DPI-C: UNIX socket fd = %d\n", sfd);
 
     memset(&server, 0, sizeof(struct sockaddr_un));
     server.sun_family = AF_UNIX;
@@ -58,19 +58,19 @@ int socket_unix_listen(const char* name) {
 
     // bind socket file descriptor to socket
     if (bind(sfd, (struct sockaddr *)&server, sizeof(struct sockaddr_un)) != 0) {
-        printf("DPI-C: Bind failed with errno = %0d.\n", errno);
+        vpi_printf("DPI-C: Bind failed with errno = %0d.\n", errno);
         perror("DPI-C: socket bind:");
         return -1;
     } else {
-        printf("DPI-C: Socket successfully binded...\n");
+        vpi_printf("DPI-C: Socket successfully binded...\n");
     }
 
     // mark the socket as passive (accepting connections from clients)
     if (listen(sfd, 5) == -1) {
-        printf("DPI-C: Listen failed.\n");
+        vpi_printf("DPI-C: Listen failed.\n");
         return -1;
     } else {
-        printf("DPI-C: Server listening..\n");
+        vpi_printf("DPI-C: Server listening..\n");
     }
 
     // return socket fd
@@ -84,10 +84,10 @@ int socket_tcp_listen(const uint16_t port) {
     // TCP socket create and verification
     sfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sfd == -1) {
-        printf("DPI-C: Server TCP socket creation failed...\n");
+        vpi_printf("DPI-C: Server TCP socket creation failed...\n");
         return -1;
     } else {
-        printf("DPI-C: TCP socket fd = %d\n", sfd);
+        vpi_printf("DPI-C: TCP socket fd = %d\n", sfd);
     }
     bzero(&server, sizeof(server));
 
@@ -98,19 +98,19 @@ int socket_tcp_listen(const uint16_t port) {
 
     // Binding newly created socket to given IP and verification
     if ((bind(sfd, (struct sockaddr *)&server, sizeof(server))) != 0) {
-        printf("DPI-C: Bind failed with errno = %0d.\n", errno);
+        vpi_printf("DPI-C: Bind failed with errno = %0d.\n", errno);
         perror("DPI-C: socket bind:");
         return -1;
     } else {
-        printf("DPI-C: Socket successfully binded...\n");
+        vpi_printf("DPI-C: Socket successfully binded...\n");
     }
 
     // Now server is ready to listen and verification
     if ((listen(sfd, 5)) != 0) {
-        printf("DPI-C: Listen failed.\n");
+        vpi_printf("DPI-C: Listen failed.\n");
         return -1;
     } else {
-        printf("DPI-C: Server listening..\n");
+        vpi_printf("DPI-C: Server listening..\n");
     }
 
     // return socket fd
@@ -119,14 +119,14 @@ int socket_tcp_listen(const uint16_t port) {
 
 // accept connection from client (to a given socket fd)
 int socket_unix_accept () {
-    printf("DPI-C: Waiting for client to connect...\n");
+    vpi_printf("DPI-C: Waiting for client to connect...\n");
     cfd = accept(sfd, NULL, NULL);
     if (cfd < 0) {
-        printf("DPI-C: Server accept failed with errno = %d.\n", errno);
+        vpi_printf("DPI-C: Server accept failed with errno = %d.\n", errno);
         perror("DPI-C: socket accept:");
         exit(0);
     } else {
-        printf("DPI-C: Accepted client connection fd = %d\n", cfd);
+        vpi_printf("DPI-C: Accepted client connection fd = %d\n", cfd);
     }
   
     // return client fd
@@ -143,22 +143,22 @@ int socket_tcp_accept () {
     // Accept the data packet from client and verification
     cfd = accept(sfd, (struct sockaddr *)&client, &len);
     if (cfd < 0) {
-        printf("DPI-C: Server accept failed with errno = %d.\n", errno);
+        vpi_printf("DPI-C: Server accept failed with errno = %d.\n", errno);
         perror("DPI-C: socket accept:");
         exit(0);
     }
     else {
-        printf("DPI-C: Accepted client connection fd = %d\n", cfd);
+        vpi_printf("DPI-C: Accepted client connection fd = %d\n", cfd);
     }
 
     // disable the disable Nagle's algorithm in an attempt to speed up TCP
     len = 1;
     if (setsockopt(cfd, IPPROTO_TCP, TCP_NODELAY, &len, sizeof(len)) != 0) {
-        printf("DPI-C: Server socket options failed with errno = %d.\n", errno);
+        vpi_printf("DPI-C: Server socket options failed with errno = %d.\n", errno);
         perror("DPI-C: setsockopt:");
         exit(0);
     } else {
-        printf("DPI-C: Server socket options set.\n");
+        vpi_printf("DPI-C: Server socket options set.\n");
     }
 
     // return client fd
@@ -168,8 +168,7 @@ int socket_tcp_accept () {
 // close connection from client
 int socket_close () {
     return close(cfd);
-    printf("DPI-C: Closed connection from client.");
-}
+    vpi_printf("DPI-C: Closed connection from client.");
 
 // transmitter
 int socket_send (const svOpenArrayHandle data, int flags) {
@@ -177,7 +176,7 @@ int socket_send (const svOpenArrayHandle data, int flags) {
     status = send(cfd, svGetArrayPtr(data), svSizeOfArray(data), flags);
     if (status == -1) {
         // https://en.wikipedia.org/wiki/Errno.h
-        printf("DPI-C: SEND failed with errno = %0d.\n", errno);
+        vpi_printf("DPI-C: SEND failed with errno = %0d.\n", errno);
         perror("DPI-C: socket send:");
         return -1;
     }
@@ -190,7 +189,7 @@ int socket_recv (const svOpenArrayHandle data, int flags) {
     status = recv(cfd, svGetArrayPtr(data), svSizeOfArray(data), flags);
     if (status == -1) {
         // https://en.wikipedia.org/wiki/Errno.h
-        printf("DPI-C: RECV failed with errno = %0d.\n", errno);
+        vpi_printf("DPI-C: RECV failed with errno = %0d.\n", errno);
         perror("DPI-C: socket recv:");
         return -1;
     }
