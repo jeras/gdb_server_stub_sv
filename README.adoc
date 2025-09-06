@@ -103,13 +103,13 @@ while periodically (every clock cycle) checking for GDB commands.
 TODO (simple):
 
 * add support for more packets (`q*` queries, `v*`, ...),
-  * ~query for capabilities~, (DONE)
-  * ~advanced mode~, (DONE)
-  * ~mode without acknowledge~, (DONE, tested)
+  * ~~query for capabilities~~, (DONE)
+  * ~~advanced mode~~, (DONE)
+  * ~~mode without acknowledge~~, (DONE, tested)
 * expand support for additional formats of partially supported packets,
 * write regression tests (simple but a lot of work),
 * integration with GUI tools,
-* ~support for TCP sockets~, (DONE, tested)
+* ~~support for TCP sockets~~, (DONE, tested)
 * support for handling illegal instructions,
 * backtracing, (WIP)
 * support for binary memory access packets (`x`/`X`),
@@ -117,8 +117,8 @@ TODO (simple):
 * modify DUT memory access to handle byte array instead of single bytes
 * workarounds for Verilator issues,
 * LLDB support, (WIP)
-* ~support for pausing the simulation (`$stop()`), to be able to see waveforms~, (DONE using the `D` packet, GDB `detach` command)
-  ~also enabling/disabling waveform dumping,~ (DONE using a `monitor` packet, not tested yet)
+* ~~support for pausing the simulation (`$stop()`), to be able to see waveforms~~, (DONE using the `D` packet, GDB `detach` command)
+  ~~also enabling/disabling waveform dumping,~~ (DONE using a `monitor` packet, not tested yet)
 * ...
 
 TODO (difficult):
@@ -128,10 +128,10 @@ TODO (difficult):
   * inserting/removing breakpoints/watchpoints and relation to step/continue,
   * software breakpoints inserting/removing is done with `z/Z` packets or `m/M` (memory access),
   * I/C (32/16 bit EBREAK instruction) breakpoints.
-* ~check whether there are race conditions to fix~ (WIP, improved code separation),
+* ~~check whether there are race conditions to fix~~ (WIP, improved code separation),
 * the code currently only runs in Questa, try to port to other simulators,
-* ~generalize access to more than one memory~ (DONE), and additional registers (CSR)
-  ~(full generalization requires the SystemVerilog simulator to support the `alias` keyword),~ (not necessary, used a different approach with shadow memory)
+* ~~generalize access to more than one memory~~ (DONE), and additional registers (CSR)
+  ~~(full generalization requires the SystemVerilog simulator to support the `alias` keyword),~~ (not necessary, used a different approach with shadow memory)
 * add file storage fot the trace, something like a double linked list
 * ...
 
