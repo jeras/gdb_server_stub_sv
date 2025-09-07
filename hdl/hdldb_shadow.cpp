@@ -16,18 +16,126 @@
 // C++ includes
 #include <string>
 #include <vector>
+#include <array>
 #include <map>
 #include <bitset>
 #include <bit>
+#include <utility>
 
 using namespace std;
 
 ///////////////////////////////////////////////////////////////////////////////
-// GDB shadow class
+// HDLDB registers class
 ///////////////////////////////////////////////////////////////////////////////
 
 // 32/64 bit CPU selection
 template <typename XLEN, typename FLEN>
+
+class hdldbRegisters {
+
+    ///////////////////////////////////////
+    // DUT access
+    ///////////////////////////////////////
+
+//    dutSet 
+
+    ///////////////////////////////////////
+    // RSP access
+    ///////////////////////////////////////
+
+//    rsp
+
+};
+
+// 32/64 bit CPU selection
+template <
+    // register widths are defined as types
+    typename XLEN,
+    typename FLEN,
+    typename VLEN,
+    // extensions
+    bool extE,  // 16 GPR register file
+    bool extF,  // F extension (single precision floating point)
+    bool extD,  // D extension (double precision floating point)
+    bool extQ,  // Q extension (quad   precision floating point)
+    bool extV   // V extension (vector)
+>
+
+class riscvRegisters {
+
+    enum regSet : int {GPR, PC, FPR, VEC, CSR};
+
+    // register files
+    std::array<XLEN,   32> gpr;  // GPR (general purpose register file)
+               XLEN        pc;   // PC  (program counter)
+//  std::array<FLEN,   32> fpr;  // FPR (floating point register file)
+//  std::array<VLEN,   32> vec;  // CSR (configuration status registers)
+    std::array<XLEN, 4096> csr;  // CSR (configuration status registers)
+
+    ///////////////////////////////////////
+    // DUT access
+    ///////////////////////////////////////
+
+    XLEN write (
+        unsigned int idx,  // register index
+        regSet       set,  // register file
+        XLEN         val   // value
+    ) {
+        switch (set) {
+            case GPR:  return std::exchange(gpr[idx], val);
+            case PC :  return std::exchange(pc      , val);
+        //  case FPR:  return std::exchange(fpr[idx], val);
+        //  case VEC:  return std::exchange(vec[idx], val);
+            case CSR:  return std::exchange(csr[idx], val);
+        }
+    };
+
+    XLEN read (
+        unsigned int idx,  // register index
+        regSet       set   // register file
+    ) {
+        switch (set) {
+            case GPR:  return gpr[idx];
+            case PC :  return pc      ;
+        //  case FPR:  return fpr[idx];
+        //  case VEC:  return vec[idx];
+            case CSR:  return csr[idx];
+        }
+    };
+
+    ///////////////////////////////////////
+    // RSP access
+    ///////////////////////////////////////
+
+    void set (
+        unsigned int idx,  // register index
+        XLEN         val   // value
+    ) {
+             if (idx < 32             )  gpr[idx-0      ] = val;
+        else if (idx < 32+1           )  pc               = val;
+    //  else if (idx < 32+1+32        )  fpr[idx-32-1   ] = val;
+    //  else if (idx < 32+1+32+32     )  vec[idx-32-1-32] = val;
+        else if (idx < 32+1+     +2048)  csr[idx-32-1   ] = val;
+    };
+
+    XLEN get (
+        unsigned int idx   // register index
+    ) {
+             if (idx < 32             )  return gpr[idx-0      ];
+        else if (idx < 32+1           )  return pc              ;
+    //  else if (idx < 32+1+32        )  return fpr[idx-32-1   ];
+    //  else if (idx < 32+1+32+32     )  return vec[idx-32-1-32];
+        else if (idx < 32+1+     +2048)  return csr[idx-32-1   ];
+    };
+
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// HDLDB shadow class
+///////////////////////////////////////////////////////////////////////////////
+
+// 32/64 bit CPU selection
+template <typename XLEN, typename FLEN, unsigned int CNUM>
 
 class hdldbShadow {
 
@@ -54,12 +162,19 @@ class hdldbShadow {
         XLEN size;
     };
 
-    // DUT architecture
-    struct Architecture {
+    // CPU core architecture
+    struct ArchitectureCore {
         // number of all registers
         unsigned int gpr =   32;  // GPR number (use 16 for E extension)
         unsigned int fpr =   32;  // floating point registers number
         unsigned int csr = 4096;  // CSR number  TODO: should be a list of indexes
+        // memory map (shadow memory map)
+        std::vector<MemoryBlock> map;
+    };
+
+    // SoC system architecture
+    struct ArchitectureSystem {
+        std::array<ArchitectureCore, CNUM> cpu;
         // memory map (shadow memory map)
         std::vector<MemoryBlock> map;
     };
@@ -115,46 +230,69 @@ class hdldbShadow {
         RetiredLsu lsu;
     };
 
+    ////////////////////////////////////////
+    // core shadow
+    ////////////////////////////////////////
+
     // shadow state structure
-    struct Shadow {
+    struct ShadowCore {
         // register files
         XLEN     pc;      // PC  (program counter)
         XLEN     gpr [];  // GPR (general purpose register file)
         FLEN     fpr [];  // FPR (floating point register file)
         XLEN     csr [];  // CSR (configuration status registers)
-        // memories (array of address map regions)
+        // core local memories (array of address map regions)
         std::vector<Memory>  mem;
-        // memory mapped I/O registers (covers address space not covered by memories)
+        // core local memory mapped I/O registers (covers address space not covered by memories)
         std::map<XLEN, byte> i_o;
 
-        // associative array for hardware breakpoints/watchpoint
+        // associative array for per thread hardware breakpoints/watchpoint
         std::map<XLEN, PointTtype> bpt;
         std::map<XLEN, PointTtype> wpt;
 
         // instruction counter
-        size_t   cnt;
+        size_t     cnt;
         // current retired instruction
-        Retired  ret;
+        Retired    ret;
+        // signal
+        int        sig;
+        // reason (point type/kind)
+        PointTtype rsn;
+    };
+
+    ////////////////////////////////////////
+    // system shadow
+    ////////////////////////////////////////
+
+    struct ShadowSystem {
+        // shadow of individual CPU cores
+        std::array<ArchitectureCore, CNUM> archCore;
+
+        // system shared memories (array of address map regions)
+        std::vector<Memory>  mem;
+        // system shared memory mapped I/O registers (covers address space not covered by memories)
+        std::map<XLEN, byte> i_o;
+
+        // associative array for all threads hardware breakpoints/watchpoint
+        std::map<XLEN, PointTtype> bpt;
+        std::map<XLEN, PointTtype> wpt;
+
+        // time 
+
         // trace queue
         vector<Retired> trc;
-        // signal
-        int         sig;
-        // reason (point type/kind)
-        PointTtype          rsn;
     };
 
     ///////////////////////////////////////
     // architecture and shadow configuration array
     ///////////////////////////////////////
 
-    int cores;
-
-    std::vector<Architecture> arch;
-    std::vector<Shadow> shadow;
+    ArchitectureSystem  arch;
+    ShadowSystem        shadow;
 
 public:
     // constructor/destructor
-    hdldbShadow (const std::vector<Architecture>);
+    hdldbShadow (const std::array<ArchitectureCore, CNUM>, ArchitectureSystem);
     ~hdldbShadow ();
 
 //    Rectangle(string name) : m_name(name) {}
@@ -168,12 +306,13 @@ public:
 // constructor/destructor
 ///////////////////////////////////////////////////////////////////////////////
 
-template <typename XLEN, typename FLEN>
-hdldbShadow<XLEN, FLEN>::hdldbShadow (
-    const std::vector<Architecture> arch
+template <typename XLEN, typename FLEN, unsigned int CNUM>
+hdldbShadow<XLEN, FLEN, CNUM>::hdldbShadow (
+    const std::array<ArchitectureCore, CNUM>  archCore,
+    const            ArchitectureSystem archSystem
 ) {
     // architecture
-    arch = arch;
+    archCore = arch;
 
     // initialize DUT shadow copy
     for (unsigned int core=0; core<arch.size(); core++) {
@@ -195,8 +334,8 @@ hdldbShadow<XLEN, FLEN>::hdldbShadow (
     };
 };
 
-template <typename XLEN, typename FLEN>
-hdldbShadow<XLEN, FLEN>::~hdldbShadow () {
+template <typename XLEN, typename FLEN, unsigned int CNUM>
+hdldbShadow<XLEN, FLEN, CNUM>::~hdldbShadow () {
     // initialize DUT shadow copy
     for (unsigned int core=0; core<arch.size(); core++) {
         // memories
