@@ -454,16 +454,16 @@ package gdb_shadow_pkg;
             SIZE_T   adr =       ret.lsu.adr;
             bit      wen = $size(ret.lsu.wdt) > 0;
 
-            // match hardware breakpoint
+            // match hardware watchpoint
             if (wpt.exists(adr)) begin
-                if (((bpt[adr].ptype == watch ) && wen == 1'b1) ||
-                    ((bpt[adr].ptype == rwatch) && wen == 1'b0) ||
-                    ((bpt[adr].ptype == awatch) )) begin
+                if (((wpt[adr].ptype == watch ) && wen == 1'b1) ||
+                    ((wpt[adr].ptype == rwatch) && wen == 1'b0) ||
+                    ((wpt[adr].ptype == awatch) )) begin
                     // TODO: check is transfer size matches
                     // signal
                     sig = SIGTRAP;
                     // reason
-                    rsn = bpt[adr];
+                    rsn = wpt[adr];
                     $display("DEBUG: Triggered HW watchpoint at address %h.", adr);
                 end
             end
