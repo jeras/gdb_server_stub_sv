@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 #include <array>
+//#include <span>
 #include <map>
 #include <bitset>
 #include <bit>
@@ -29,36 +30,17 @@ using namespace std;
 ///////////////////////////////////////////////////////////////////////////////
 
 // 32/64 bit CPU selection
-template <typename XLEN, typename FLEN>
-
-class hdldbRegisters {
-
-    ///////////////////////////////////////
-    // DUT access
-    ///////////////////////////////////////
-
-//    dutSet 
-
-    ///////////////////////////////////////
-    // RSP access
-    ///////////////////////////////////////
-
-//    rsp
-
-};
-
-// 32/64 bit CPU selection
 template <
     // register widths are defined as types
     typename XLEN,
-    typename FLEN,
-    typename VLEN,
+    typename FLEN
+//    typename VLEN,
     // extensions
-    bool extE,  // 16 GPR register file
-    bool extF,  // F extension (single precision floating point)
-    bool extD,  // D extension (double precision floating point)
-    bool extQ,  // Q extension (quad   precision floating point)
-    bool extV   // V extension (vector)
+//    bool extE,  // 16 GPR register file
+//    bool extF,  // F extension (single precision floating point)
+//    bool extD,  // D extension (double precision floating point)
+//    bool extQ,  // Q extension (quad   precision floating point)
+//    bool extV   // V extension (vector)
 >
 
 class riscvRegisters {
@@ -131,6 +113,86 @@ class riscvRegisters {
 };
 
 ///////////////////////////////////////////////////////////////////////////////
+// HDLDB breakpoint/watchpoint/catchpoint class
+///////////////////////////////////////////////////////////////////////////////
+
+// 32/64 bit CPU selection
+template <typename XLEN>
+
+class hdldbPoints {
+
+    ///////////////////////////////////////
+    // type definitions
+    ///////////////////////////////////////
+
+    // point type
+    enum PointType : int {
+        swbreak   = 0,  // software breakpoint
+        hwbreak   = 1,  // hardware breakpoint
+        watch     = 2,  // write  watchpoint
+        rwatch    = 3,  // read   watchpoint
+        awatch    = 4,  // access watchpoint
+        replaylog = 5,  // reached replay log edge
+        none      = -1  // no reason is given
+    };
+
+    typedef unsigned int PointKind;
+
+    struct Point {
+        PointType type;
+        PointKind kind;
+    };
+
+    std::map<XLEN, Point> breakpoints;
+    std::map<XLEN, Point> watchpoints;
+
+    ///////////////////////////////////////
+    // DUT access
+    ///////////////////////////////////////
+
+    ///////////////////////////////////////
+    // RSP access
+    ///////////////////////////////////////
+
+    unsigned int insert (
+        PointType type,
+        XLEN      addr,
+        PointKind kind
+    ) {
+        // insert breakpoint/watchpoint into dictionary
+        switch (type) {
+            case swbreak:
+            case hwbreak:
+                breakpoints.insert(addr) = {type, kind};
+                return breakpoints.size();
+            case watch:
+            case rwatch:
+            case awatch:
+                watchpoints.insert(addr) = {type, kind};
+                return watchpoints.size();
+        };
+    };
+
+    unsigned int remove (
+        PointType type,
+        XLEN      addr,
+        PointKind kind
+    ) {
+        switch (type) {
+            case swbreak:
+            case hwbreak:
+                breakpoints.erase(addr);
+                return breakpoints.size();
+            case watch:
+            case rwatch:
+            case awatch:
+                watchpoints.erase(addr);
+                return watchpoints.size();
+        };
+    };
+};
+
+///////////////////////////////////////////////////////////////////////////////
 // HDLDB shadow class
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -145,17 +207,6 @@ class hdldbShadow {
 
     typedef std::byte Memory [];
 
-    // point type
-    enum PointTtype : int {
-        swbreak   = 0,  // software breakpoint
-        hwbreak   = 1,  // hardware breakpoint
-        watch     = 2,  // write  watchpoint
-        rwatch    = 3,  // read   watchpoint
-        awatch    = 4,  // access watchpoint
-        replaylog = 5,  // reached replay log edge
-        none      = -1  // no reason is given
-    };
-
     // memory block
     struct MemoryBlock {
         XLEN base;  
@@ -164,10 +215,6 @@ class hdldbShadow {
 
     // CPU core architecture
     struct ArchitectureCore {
-        // number of all registers
-        unsigned int gpr =   32;  // GPR number (use 16 for E extension)
-        unsigned int fpr =   32;  // floating point registers number
-        unsigned int csr = 4096;  // CSR number  TODO: should be a list of indexes
         // memory map (shadow memory map)
         std::vector<MemoryBlock> map;
     };
@@ -237,27 +284,25 @@ class hdldbShadow {
     // shadow state structure
     struct ShadowCore {
         // register files
-        XLEN     pc;      // PC  (program counter)
-        XLEN     gpr [];  // GPR (general purpose register file)
-        FLEN     fpr [];  // FPR (floating point register file)
-        XLEN     csr [];  // CSR (configuration status registers)
+        riscvRegisters<XLEN, FLEN> reg;
         // core local memories (array of address map regions)
         std::vector<Memory>  mem;
         // core local memory mapped I/O registers (covers address space not covered by memories)
         std::map<XLEN, byte> i_o;
 
         // associative array for per thread hardware breakpoints/watchpoint
-        std::map<XLEN, PointTtype> bpt;
-        std::map<XLEN, PointTtype> wpt;
+        hdldbPoints<XLEN> breakpoints;
+        hdldbPoints<XLEN> watchpoints;
 
         // instruction counter
         size_t     cnt;
         // current retired instruction
         Retired    ret;
         // signal
-        int        sig;
+        int        signal;
         // reason (point type/kind)
-        PointTtype rsn;
+//        hdldbPoints<XLEN>::PointType reason;
+        int        reason;
     };
 
     ////////////////////////////////////////
@@ -274,10 +319,11 @@ class hdldbShadow {
         std::map<XLEN, byte> i_o;
 
         // associative array for all threads hardware breakpoints/watchpoint
-        std::map<XLEN, PointTtype> bpt;
-        std::map<XLEN, PointTtype> wpt;
+        hdldbPoints<XLEN> breakpoints;
+        hdldbPoints<XLEN> watchpoints;
 
-        // time 
+        // time
+
 
         // trace queue
         vector<Retired> trc;
@@ -294,11 +340,8 @@ public:
     // constructor/destructor
     hdldbShadow (const std::array<ArchitectureCore, CNUM>, ArchitectureSystem);
     ~hdldbShadow ();
-
-//    Rectangle(string name) : m_name(name) {}
-//  void set_values (int,int);
-//  int area () {return m_width*m_height;}
-//  const char* name () {return m_name.c_str();}
+    // breakpoint/watchpoint/catchpoint
+    bool matchPoint(Retired);
 };
 
 
@@ -316,10 +359,6 @@ hdldbShadow<XLEN, FLEN, CNUM>::hdldbShadow (
 
     // initialize DUT shadow copy
     for (unsigned int core=0; core<arch.size(); core++) {
-        // register files
-        shadow[core].gpr = new XLEN [arch[core].gpr];
-        shadow[core].fpr = new FLEN [arch[core].fpr];
-        shadow[core].csr = new XLEN [arch[core].csr];
         // memories
         for (unsigned int i=0; i<arch[core].map.size(); i++) {
             shadow[core].mem.push_back(new Memory [arch[core].mem[i].size]);
@@ -327,8 +366,9 @@ hdldbShadow<XLEN, FLEN, CNUM>::hdldbShadow (
         // instruction counter
         shadow[core].cnt = 0;
         // signal
-        shadow[core].sig = SIGTRAP;
+        shadow[core].signal = SIGTRAP;
         // reason (point type/kind)
+        // TODO
         // reached beginning of trace
         //rsn;
     };
@@ -342,9 +382,70 @@ hdldbShadow<XLEN, FLEN, CNUM>::~hdldbShadow () {
         for (unsigned int i=0; i<arch[core].map.size(); i++) {
             delete shadow[core].mem[i];
         }
-        // register files
-        delete shadow[core].gpr;
-        delete shadow[core].fpr;
-        delete shadow[core].csr;
+    };
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// breakpoint/watchpoint/catchpoint
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename XLEN, typename FLEN, unsigned int CNUM>
+bool hdldbShadow<XLEN, FLEN, CNUM>::matchPoint (
+    Retired ret
+) {
+    constexpr std::array<std::byte, 4>   ebreak = {std::byte{0x73}, std::byte{0x00}, std::byte{0x10}, std::byte{0x00}};  // 32'h00100073
+    constexpr std::array<std::byte, 2> c_ebreak = {std::byte{0x02}, std::byte{0x90}};                                    // 16'h9002
+
+    XLEN addr;
+
+                             addr = ret.ifu.adr;
+    std::array<std::byte, 4> inst = ret.ifu.rdt;
+    // match illegal instruction
+    if (ret.ifu.ill) {
+        shadow.signal = SIGILL;
+//            debug("DEBUG: Triggered illegal instruction at address %h.", addr);
+        return true;
+    }
+
+    // match software breakpoint
+    // match EBREAK/C.EBREAK instruction
+    // TODO: there are also explicit SW breakpoints that depend on ILEN
+    else if (std::equal(  ebreak.begin(),   ebreak.end(), inst) ||
+             std::equal(c_ebreak.begin(), c_ebreak.end(), inst)) {              
+        shadow.signal = SIGTRAP;
+//            $display("DEBUG: Triggered SW breakpoint at address %h.", addr);
+        return true;
+    }
+
+    // match hardware breakpoint
+    else if (shadow.breakpoints.contains(addr)) {
+        if (shadow.breakpoints[addr].type == shadow.breakpoints::hwbreak) {
+            // signal
+            shadow.signal = SIGTRAP;
+            // reason
+//            reason = shadow.breakpoints[addr].type;
+            shadow.reason = 3;
+//            $display("DEBUG: Triggered HW breakpoint at address %h.", addr);
+            return true;
+        };
+    };
+
+         addr = ret.lsu.adr;
+    bool rena = ret.lsu.rdt.size() > 0;
+    bool wena = ret.lsu.wdt.size() > 0;
+
+    // match hardware breakpoint
+    if (shadow.watchpoints.contains(addr)) {
+        if (((shadow.watchpoints[addr].ptype == shadow.watchpoints::watch ) && wena) ||
+            ((shadow.watchpoints[addr].ptype == shadow.watchpoints::rwatch) && rena) ||
+            ((shadow.watchpoints[addr].ptype == shadow.watchpoints::awatch) )) {
+            // TODO: check is transfer size matches
+            // signal
+            shadow.signal = SIGTRAP;
+            // reason
+            shadow.reason = shadow.watchpoints[addr].type;
+//            $display("DEBUG: Triggered HW watchpoint at address %h.", addr);
+            return true;
+        };
     };
 };
