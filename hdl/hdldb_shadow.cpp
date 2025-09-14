@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 #include <array>
-//#include <span>
+#include <span>
 #include <map>
 #include <bitset>
 #include <bit>
@@ -340,10 +340,12 @@ public:
     // constructor/destructor
     hdldbShadow (const std::array<ArchitectureCore, CNUM>, ArchitectureSystem);
     ~hdldbShadow ();
+    // memory read/write
+    std::vector<std::byte> memRead (XLEN, int unsigned);
+    void                   memWrite(XLEN, std::vector<std::byte>);
     // breakpoint/watchpoint/catchpoint
     bool matchPoint(Retired);
 };
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // constructor/destructor
@@ -383,6 +385,53 @@ hdldbShadow<XLEN, FLEN, CNUM>::~hdldbShadow () {
             delete shadow[core].mem[i];
         }
     };
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// memory access
+///////////////////////////////////////////////////////////////////////////////
+
+// read from shadow memory
+template <typename XLEN, typename FLEN, unsigned int CNUM>
+std::vector<std::byte> hdldbShadow<XLEN, FLEN, CNUM>::memRead (
+    XLEN         addr,
+    int unsigned size
+) {
+    std::vector<std::byte> tmp;
+    // reading from an address map block
+    for (int unsigned blk=0; blk<MMAP.size(); blk++) {
+        if ((addr >= MMAP[blk].base) &&
+            (addr <  MMAP[blk].base + MMAP[blk].size)) {
+            tmp = {>>{mem[blk] with [adr - MMAP[blk].base +: siz]}};
+            return tmp;
+        };
+    };
+    // reading from an unmapped IO region (reads have higher priority)
+    // TODO: handle access to nonexistent entries with a warning?
+    // TODO: handle access with a size mismatch
+    tmp = i_o[adr];
+    return tmp;
+};
+
+// write to shadow memory
+template <typename XLEN, typename FLEN, unsigned int CNUM>
+void hdldbShadow<XLEN, FLEN, CNUM>::memWrite (
+    XLEN                   addr,
+    std::vector<std::byte> data
+) {
+    // writing to an address map block
+    for (int unsigned blk=0; blk<MMAP.size; blk++) {
+        if ((addr >= MMAP[blk].base) &&
+            (addr <  MMAP[blk].base + MMAP[blk].size)) {
+            {>>{mem[blk] with [adr - MMAP[blk].base +: dat.size()]}} = dat;
+//            for (int unsigned i=0; i<dat.size(); i++) begin: byt
+//              mem[blk][adr - MMAP[blk].base] = dat[i];
+//            end: byt
+            return;
+        };
+    };
+    // writing to an unmapped IO region (reads have higher priority)
+    i_o[adr] = dat;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
