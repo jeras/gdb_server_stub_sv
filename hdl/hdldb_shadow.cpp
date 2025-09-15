@@ -50,7 +50,7 @@ class riscvRegisters {
     // register files
     std::array<XLEN,   32> gpr;  // GPR (general purpose register file)
                XLEN        pc;   // PC  (program counter)
-//  std::array<FLEN,   32> fpr;  // FPR (floating point register file)
+    std::array<FLEN,   32> fpr;  // FPR (floating point register file)
 //  std::array<VLEN,   32> vec;  // CSR (configuration status registers)
     std::array<XLEN, 4096> csr;  // CSR (configuration status registers)
 
@@ -66,7 +66,7 @@ class riscvRegisters {
         switch (set) {
             case GPR:  return std::exchange(gpr[idx], val);
             case PC :  return std::exchange(pc      , val);
-        //  case FPR:  return std::exchange(fpr[idx], val);
+            case FPR:  return std::exchange(fpr[idx], val);
         //  case VEC:  return std::exchange(vec[idx], val);
             case CSR:  return std::exchange(csr[idx], val);
         }
@@ -110,6 +110,121 @@ class riscvRegisters {
         else if (idx < 32+1+     +2048)  return csr[idx-32-1   ];
     };
 
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// HDLDB address map class
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename XLEN, unsigned int NUM_MEM, unsigned int NUM_I_O>
+
+class hdldbAddressMap {
+
+    struct AddressBlock {
+        XLEN base;  
+        XLEN size;
+    };
+
+    struct AddressMap {
+        std::array<AddressBlock, NUM_MEM> mem;
+        std::array<AddressBlock, NUM_I_O> i_o;
+    };
+
+    AddressMap map;
+
+    constexpr XLEN 
+
+    // constructor
+    hdldbAddressMap (
+        const AddressMap map
+    ) {
+        map = map;
+    };
+    // cumulative memory size
+    constexpr XLEN memSize() {
+        XLEN size = 0;
+        for (const auto& block : map.mem) {
+            size += block.size;
+            // TODO: error if size is not a multiple of XLEN
+
+        };
+    };
+};
+
+template <typename XLEN, unsigned int NUM_MEM, unsigned int NUM_I_O>
+hdldbAddressMap<XLEN, NUM_MEM, NUM_I_O>::hdldbAddressMap (
+    const hdldbAddressMap<XLEN, NUM_MEM, NUM_I_O>::AddressMap map
+) {
+    map = map;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// HDLDB memory map class
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename XLEN, hdldbAddressMap AMAP>
+
+class hdldbMemoryMap {
+
+    // core local memories (array of address map regions)
+    std::array<std::byte, >  mem;
+    // core local memory mapped I/O registers (covers address space not covered by memories)
+    std::map<XLEN, byte> i_o;
+
+    // constructor/destructor
+    hdldbMemoryMap (const std::array<ArchitectureCore, CNUM>, ArchitectureSystem);
+    ~hdldbMemoryMap ();
+    // memory read/write
+    std::vector<std::byte> memRead (XLEN, int unsigned);
+    void                   memWrite(XLEN, std::vector<std::byte>);
+    // breakpoint/watchpoint/catchpoint
+    bool matchPoint(Retired);
+
+};
+
+// read from shadow memory
+
+
+template <typename XLEN, typename FLEN, unsigned int CNUM>
+std::vector<std::byte> hdldbShadow<XLEN, FLEN, CNUM>::memRead (
+    XLEN         addr,
+    int unsigned size
+) {
+    std::vector<std::byte> tmp;
+    // reading from an address map block
+    for (int unsigned blk=0; blk<MMAP.size(); blk++) {
+        if ((addr >= MMAP[blk].base) &&
+            (addr <  MMAP[blk].base + MMAP[blk].size)) {
+            tmp = {>>{mem[blk] with [adr - MMAP[blk].base +: siz]}};
+            return tmp;
+        };
+    };
+    // reading from an unmapped IO region (reads have higher priority)
+    // TODO: handle access to nonexistent entries with a warning?
+    // TODO: handle access with a size mismatch
+    tmp = i_o[adr];
+    return tmp;
+};
+
+// write to shadow memory
+template <typename XLEN, typename FLEN, unsigned int CNUM>
+void hdldbShadow<XLEN, FLEN, CNUM>::memWrite (
+    XLEN                   addr,
+    std::vector<std::byte> data
+) {
+    // writing to an address map block
+    for (int unsigned blk=0; blk<MMAP.size; blk++) {
+        if ((addr >= MMAP[blk].base) &&
+            (addr <  MMAP[blk].base + MMAP[blk].size)) {
+            {>>{mem[blk] with [adr - MMAP[blk].base +: dat.size()]}} = dat;
+//            for (int unsigned i=0; i<dat.size(); i++) begin: byt
+//              mem[blk][adr - MMAP[blk].base] = dat[i];
+//            end: byt
+            return;
+        };
+    };
+    // writing to an unmapped IO region (reads have higher priority)
+    i_o[adr] = dat;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -204,20 +319,6 @@ class hdldbShadow {
     ///////////////////////////////////////
     // type definitions
     ///////////////////////////////////////
-
-    typedef std::byte Memory [];
-
-    // memory block
-    struct MemoryBlock {
-        XLEN base;  
-        XLEN size;
-    };
-
-    // CPU core architecture
-    struct ArchitectureCore {
-        // memory map (shadow memory map)
-        std::vector<MemoryBlock> map;
-    };
 
     // SoC system architecture
     struct ArchitectureSystem {
@@ -385,53 +486,6 @@ hdldbShadow<XLEN, FLEN, CNUM>::~hdldbShadow () {
             delete shadow[core].mem[i];
         }
     };
-};
-
-///////////////////////////////////////////////////////////////////////////////
-// memory access
-///////////////////////////////////////////////////////////////////////////////
-
-// read from shadow memory
-template <typename XLEN, typename FLEN, unsigned int CNUM>
-std::vector<std::byte> hdldbShadow<XLEN, FLEN, CNUM>::memRead (
-    XLEN         addr,
-    int unsigned size
-) {
-    std::vector<std::byte> tmp;
-    // reading from an address map block
-    for (int unsigned blk=0; blk<MMAP.size(); blk++) {
-        if ((addr >= MMAP[blk].base) &&
-            (addr <  MMAP[blk].base + MMAP[blk].size)) {
-            tmp = {>>{mem[blk] with [adr - MMAP[blk].base +: siz]}};
-            return tmp;
-        };
-    };
-    // reading from an unmapped IO region (reads have higher priority)
-    // TODO: handle access to nonexistent entries with a warning?
-    // TODO: handle access with a size mismatch
-    tmp = i_o[adr];
-    return tmp;
-};
-
-// write to shadow memory
-template <typename XLEN, typename FLEN, unsigned int CNUM>
-void hdldbShadow<XLEN, FLEN, CNUM>::memWrite (
-    XLEN                   addr,
-    std::vector<std::byte> data
-) {
-    // writing to an address map block
-    for (int unsigned blk=0; blk<MMAP.size; blk++) {
-        if ((addr >= MMAP[blk].base) &&
-            (addr <  MMAP[blk].base + MMAP[blk].size)) {
-            {>>{mem[blk] with [adr - MMAP[blk].base +: dat.size()]}} = dat;
-//            for (int unsigned i=0; i<dat.size(); i++) begin: byt
-//              mem[blk][adr - MMAP[blk].base] = dat[i];
-//            end: byt
-            return;
-        };
-    };
-    // writing to an unmapped IO region (reads have higher priority)
-    i_o[adr] = dat;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
