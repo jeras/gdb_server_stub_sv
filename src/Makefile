@@ -1,20 +1,22 @@
 # Compiler
-CXX = g++
+CXX = g++-14
 
 # Compiler flags
-CXXFLAGS = -Wall -g
+CXXFLAGS = -Wall -g -std=c++23
+#CXXFLAGS = -Wall -g -std=c++23 -fmodules-ts
 
 # Target executable
 TARGET = hdldb
 
 # Source files
-SRCS = hdldb.cpp hdldb_shadow.cpp
+SRCS = hdldb.cpp Shadow.cpp Trace.cpp Protocol.cpp
 
 # Object files
 OBJS = $(SRCS:.cpp=.o)
 
 # Default rule to build and run the executable
 all: $(TARGET)
+#all: system-headers $(TARGET)
 
 # Rule to link object files into the target executable
 $(TARGET): $(OBJS)
@@ -26,4 +28,4 @@ $(TARGET): $(OBJS)
 
 # Clean rule to remove generated files
 clean:
-	del $(TARGET) $(OBJS)
+	rm $(TARGET) $(OBJS)

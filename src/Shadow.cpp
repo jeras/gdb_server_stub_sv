@@ -23,6 +23,8 @@
 #include <bit>
 #include <utility>
 
+namespace hdldb {
+
 using namespace std;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -45,43 +47,46 @@ template <
 
 class riscvRegisters {
 
-    enum regSet : int {GPR, PC, FPR, VEC, CSR};
+    enum class RegSet : int {GPR, PC, FPR, VEC, CSR};
+
+    // TODO: E extension
+    // const auto NGPR = extE ? 16 : 32;
 
     // register files
-    std::array<XLEN,   32> gpr;  // GPR (general purpose register file)
-               XLEN        pc;   // PC  (program counter)
-    std::array<FLEN,   32> fpr;  // FPR (floating point register file)
-//  std::array<VLEN,   32> vec;  // CSR (configuration status registers)
-    std::array<XLEN, 4096> csr;  // CSR (configuration status registers)
+    std::array<XLEN,   32> m_gpr;  // GPR (general purpose register file)
+               XLEN        m_pc;   // PC  (program counter)
+    std::array<FLEN,   32> m_fpr;  // FPR (floating point register file)
+//  std::array<VLEN,   32> m_vec;  // CSR (configuration status registers)
+    std::array<XLEN, 4096> m_csr;  // CSR (configuration status registers)
 
     ///////////////////////////////////////
     // DUT access
     ///////////////////////////////////////
 
     XLEN write (
-        unsigned int idx,  // register index
-        regSet       set,  // register file
-        XLEN         val   // value
+        const regSet       set,  // register file
+        const unsigned int idx,  // register index
+        const XLEN         val   // value
     ) {
         switch (set) {
-            case GPR:  return std::exchange(gpr[idx], val);
-            case PC :  return std::exchange(pc      , val);
-            case FPR:  return std::exchange(fpr[idx], val);
-        //  case VEC:  return std::exchange(vec[idx], val);
-            case CSR:  return std::exchange(csr[idx], val);
-        }
+            case GPR:  return std::exchange(m_gpr[idx], val);
+            case PC :  return std::exchange(m_pc      , val);
+            case FPR:  return std::exchange(m_fpr[idx], val);
+        //  case VEC:  return std::exchange(m_vec[idx], val);
+            case CSR:  return std::exchange(m_csr[idx], val);
+        };
     };
 
     XLEN read (
-        unsigned int idx,  // register index
-        regSet       set   // register file
-    ) {
+        const regSet       set,  // register file
+        const unsigned int idx   // register index
+    ) const {
         switch (set) {
-            case GPR:  return gpr[idx];
-            case PC :  return pc      ;
-        //  case FPR:  return fpr[idx];
-        //  case VEC:  return vec[idx];
-            case CSR:  return csr[idx];
+            case GPR:  return m_gpr[idx];
+            case PC :  return m_pc      ;
+        //  case FPR:  return m_fpr[idx];
+        //  case VEC:  return m_vec[idx];
+            case CSR:  return m_csr[idx];
         }
     };
 
@@ -90,24 +95,24 @@ class riscvRegisters {
     ///////////////////////////////////////
 
     void set (
-        unsigned int idx,  // register index
-        XLEN         val   // value
+        const unsigned int idx,  // register index
+        const XLEN         val   // value
     ) {
-             if (idx < 32             )  gpr[idx-0      ] = val;
-        else if (idx < 32+1           )  pc               = val;
-    //  else if (idx < 32+1+32        )  fpr[idx-32-1   ] = val;
-    //  else if (idx < 32+1+32+32     )  vec[idx-32-1-32] = val;
-        else if (idx < 32+1+     +2048)  csr[idx-32-1   ] = val;
+             if (idx < 32             )  m_gpr[idx-0      ] = val;
+        else if (idx < 32+1           )  m_pc               = val;
+    //  else if (idx < 32+1+32        )  m_fpr[idx-32-1   ] = val;
+    //  else if (idx < 32+1+32+32     )  m_vec[idx-32-1-32] = val;
+        else if (idx < 32+1+     +2048)  m_csr[idx-32-1   ] = val;
     };
 
     XLEN get (
-        unsigned int idx   // register index
-    ) {
-             if (idx < 32             )  return gpr[idx-0      ];
-        else if (idx < 32+1           )  return pc              ;
-    //  else if (idx < 32+1+32        )  return fpr[idx-32-1   ];
-    //  else if (idx < 32+1+32+32     )  return vec[idx-32-1-32];
-        else if (idx < 32+1+     +2048)  return csr[idx-32-1   ];
+        const unsigned int idx   // register index
+    ) const {
+             if (idx < 32             )  return m_gpr[idx-0      ];
+        else if (idx < 32+1           )  return m_pc              ;
+    //  else if (idx < 32+1+32        )  return m_fpr[idx-32-1   ];
+    //  else if (idx < 32+1+32+32     )  return m_vec[idx-32-1-32];
+        else if (idx < 32+1+     +2048)  return m_csr[idx-32-1   ];
     };
 
 };
@@ -241,7 +246,7 @@ class hdldbPoints {
     ///////////////////////////////////////
 
     // point type
-    enum PointType : int {
+    enum class PointType : int {
         swbreak   = 0,  // software breakpoint
         hwbreak   = 1,  // hardware breakpoint
         watch     = 2,  // write  watchpoint
@@ -551,4 +556,7 @@ bool hdldbShadow<XLEN, FLEN, CNUM>::matchPoint (
             return true;
         };
     };
+};
+
+// end of hdldb namespace
 };
