@@ -256,7 +256,7 @@ class hdldbPoints {
         none      = -1  // no reason is given
     };
 
-    typedef unsigned int PointKind;
+    using PointKind = unsigned int;
 
     struct Point {
         PointType type;
