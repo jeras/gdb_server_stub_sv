@@ -6,7 +6,19 @@
 // Licensed under CERN-OHL-P v2 or later
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "Shadow.h"
+// C includes
+#include <cstdint>
+#include <csignal>
+
+// C++ includes
+#include <string>
+#include <vector>
+#include <array>
+#include <span>
+#include <map>
+#include <bitset>
+#include <bit>
+#include <utility>
 
 namespace hdldb {
 
@@ -14,125 +26,120 @@ namespace hdldb {
 // HDLDB registers class
 ///////////////////////////////////////////////////////////////////////////////
 
-template <typename XLEN, typename FLEN, typename VLEN, bool extE, bool extF, bool extV>
-XLEN RegistersRiscV<XLEN, FLEN, VLEN, extE, extF, extV>::write (
-    const RegisterEnum set,  // register file
-    const unsigned int idx,  // register index
-    const XLEN         val   // value
+// 
+enum class RegisterEnum : int {GPR, PC, FPR, VEC, CSR};
+
+template <
+    // register widths are defined as types
+    typename XLEN,
+    typename FLEN,
+    typename VLEN,
+    // extensions
+    bool extE,  // 16 GPR register file
+    bool extF,  // F extension (single precision floating point)
+    bool extV   // V extension (vector)
+>
+
+class RegistersRiscV {
+
+    // TODO: E extension
+    // const auto NGPR = extE ? 16 : 32;
+
+private:
+    // register files
+    std::array<XLEN,   32> m_gpr;  // GPR (general purpose register file)
+               XLEN        m_pc;   // PC  (program counter)
+    std::array<FLEN,   32> m_fpr;  // FPR (floating point register file)
+    std::array<VLEN,   32> m_vec;  // CSR (configuration status registers)
+    std::array<XLEN, 4096> m_csr;  // CSR (configuration status registers)
+
+    ///////////////////////////////////////
+    // DUT access
+    ///////////////////////////////////////
+
+    XLEN write (
+        const RegisterEnum,  // register file
+        const unsigned int,  // register index
+        const XLEN            // value
+    );
+
+    XLEN read (
+        const RegisterEnum,  // register file
+        const unsigned int   // register index
+    ) const;
+
+    ///////////////////////////////////////
+    // RSP access
+    ///////////////////////////////////////
+
+    void set (
+        const unsigned int,  // register index
+        const XLEN           // value
+    );
+
+    XLEN get (
+        const unsigned int   // register index
+    ) const;
+
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// HDLDB address map class
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename XLEN>
+struct AddressBlock {
+    XLEN base;  
+    XLEN size;
+};
+
+// cumulative memory block array size
+template <typename XLEN, std::size_t NUM>
+constexpr XLEN addressBlockSize(
+    const std::array<AddressBlock<XLEN>, NUM> blocks
 ) {
-    switch (set) {
-        case GPR:  return std::exchange(m_gpr[idx], val);
-        case PC :  return std::exchange(m_pc      , val);
-        case FPR:  return std::exchange(m_fpr[idx], val);
-    //  case VEC:  return std::exchange(m_vec[idx], val);
-        case CSR:  return std::exchange(m_csr[idx], val);
+    XLEN size = 0;
+    for (const auto& block : blocks) {
+        size += block.size;
     };
+    return size;
 };
 
-template <typename XLEN, typename FLEN, typename VLEN, bool extE, bool extF, bool extV>
-XLEN RegistersRiscV<XLEN, FLEN, VLEN, extE, extF, extV>::read (
-    const RegisterEnum set,  // register file
-    const unsigned int idx   // register index
-) const {
-    switch (set) {
-        case GPR:  return m_gpr[idx];
-        case PC :  return m_pc      ;
-    //  case FPR:  return m_fpr[idx];
-    //  case VEC:  return m_vec[idx];
-        case CSR:  return m_csr[idx];
-    }
-};
-
-template <typename XLEN, typename FLEN, typename VLEN, bool extE, bool extF, bool extV>
-void RegistersRiscV<XLEN, FLEN, VLEN, extE, extF, extV>::set (
-    const unsigned int idx,  // register index
-    const XLEN         val   // value
+// memory block array alignment check
+template <typename XLEN, std::size_t NUM>
+constexpr bool addressBlockAlignment(
+    const std::array<AddressBlock<XLEN>, NUM> blocks
 ) {
-         if (idx < 32             )  m_gpr[idx-0      ] = val;
-    else if (idx < 32+1           )  m_pc               = val;
-//  else if (idx < 32+1+32        )  m_fpr[idx-32-1   ] = val;
-//  else if (idx < 32+1+32+32     )  m_vec[idx-32-1-32] = val;
-    else if (idx < 32+1+     +2048)  m_csr[idx-32-1   ] = val;
-};
-
-template <typename XLEN, typename FLEN, typename VLEN, bool extE, bool extF, bool extV>
-XLEN RegistersRiscV<XLEN, FLEN, VLEN, extE, extF, extV>::get (
-    const unsigned int idx   // register index
-) const {
-         if (idx < 32             )  return m_gpr[idx-0      ];
-    else if (idx < 32+1           )  return m_pc              ;
-//  else if (idx < 32+1+32        )  return m_fpr[idx-32-1   ];
-//  else if (idx < 32+1+32+32     )  return m_vec[idx-32-1-32];
-    else if (idx < 32+1+     +2048)  return m_csr[idx-32-1   ];
+    for (const auto& block : mem) {
+        // check base alignment
+        if (block.base % sizeof(XLEN))  return false;
+        // check size alignment
+        if (block.size % sizeof(XLEN))  return false;
+    };
+    return true;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 // HDLDB memory map class
 ///////////////////////////////////////////////////////////////////////////////
 
-template <typename XLEN, hdldbAddressMap AMAP>
+template <typename XLEN>
 
-class hdldbMemoryMap {
-
+class MemoryMap {
     // core local memories (array of address map regions)
-    std::array<std::byte, >  mem;
+    std::vector<std::byte> m_mem;
     // core local memory mapped I/O registers (covers address space not covered by memories)
-    std::map<XLEN, byte> i_o;
+    std::map<XLEN, std::byte> m_i_o;
 
     // constructor/destructor
-    hdldbMemoryMap (const std::array<ArchitectureCore, CNUM>, ArchitectureSystem);
-    ~hdldbMemoryMap ();
+    MemoryMap (
+        const std::array<ArchitectureCore, CNUM>,
+        const            ArchitectureSystem
+    );
+    ~MemoryMap ();
     // memory read/write
-    std::vector<std::byte> memRead (XLEN, int unsigned);
-    void                   memWrite(XLEN, std::vector<std::byte>);
-    // breakpoint/watchpoint/catchpoint
-    bool matchPoint(Retired);
-
-};
-
-// read from shadow memory
-
-
-template <typename XLEN, typename FLEN, unsigned int CNUM>
-std::vector<std::byte> hdldbShadow<XLEN, FLEN, CNUM>::memRead (
-    XLEN         addr,
-    int unsigned size
-) {
-    std::vector<std::byte> tmp;
-    // reading from an address map block
-    for (int unsigned blk=0; blk<MMAP.size(); blk++) {
-        if ((addr >= MMAP[blk].base) &&
-            (addr <  MMAP[blk].base + MMAP[blk].size)) {
-            tmp = {>>{mem[blk] with [adr - MMAP[blk].base +: siz]}};
-            return tmp;
-        };
-    };
-    // reading from an unmapped IO region (reads have higher priority)
-    // TODO: handle access to nonexistent entries with a warning?
-    // TODO: handle access with a size mismatch
-    tmp = i_o[adr];
-    return tmp;
-};
-
-// write to shadow memory
-template <typename XLEN, typename FLEN, unsigned int CNUM>
-void hdldbShadow<XLEN, FLEN, CNUM>::memWrite (
-    XLEN                   addr,
-    std::vector<std::byte> data
-) {
-    // writing to an address map block
-    for (int unsigned blk=0; blk<MMAP.size; blk++) {
-        if ((addr >= MMAP[blk].base) &&
-            (addr <  MMAP[blk].base + MMAP[blk].size)) {
-            {>>{mem[blk] with [adr - MMAP[blk].base +: dat.size()]}} = dat;
-//            for (int unsigned i=0; i<dat.size(); i++) begin: byt
-//              mem[blk][adr - MMAP[blk].base] = dat[i];
-//            end: byt
-            return;
-        };
-    };
-    // writing to an unmapped IO region (reads have higher priority)
-    i_o[adr] = dat;
+    std::vector<std::byte> read (XLEN, std::size_t);
+    void                   write(XLEN, std::vector<std::byte>);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
