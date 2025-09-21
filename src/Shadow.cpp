@@ -70,33 +70,11 @@ XLEN RegistersRiscV<XLEN, FLEN, VLEN, extE, extF, extV>::get (
 // HDLDB memory map class
 ///////////////////////////////////////////////////////////////////////////////
 
-template <typename XLEN, hdldbAddressMap AMAP>
-
-class hdldbMemoryMap {
-
-    // core local memories (array of address map regions)
-    std::array<std::byte, >  mem;
-    // core local memory mapped I/O registers (covers address space not covered by memories)
-    std::map<XLEN, byte> i_o;
-
-    // constructor/destructor
-    hdldbMemoryMap (const std::array<ArchitectureCore, CNUM>, ArchitectureSystem);
-    ~hdldbMemoryMap ();
-    // memory read/write
-    std::vector<std::byte> memRead (XLEN, int unsigned);
-    void                   memWrite(XLEN, std::vector<std::byte>);
-    // breakpoint/watchpoint/catchpoint
-    bool matchPoint(Retired);
-
-};
-
-// read from shadow memory
-
-
-template <typename XLEN, typename FLEN, unsigned int CNUM>
-std::vector<std::byte> hdldbShadow<XLEN, FLEN, CNUM>::memRead (
-    XLEN         addr,
-    int unsigned size
+// read from shadow memory map
+template <typename XLEN>
+std::vector<std::byte> MemoryMap<XLEN>::read (
+    XLEN        addr,
+    std::size_t size
 ) {
     std::vector<std::byte> tmp;
     // reading from an address map block
@@ -110,13 +88,13 @@ std::vector<std::byte> hdldbShadow<XLEN, FLEN, CNUM>::memRead (
     // reading from an unmapped IO region (reads have higher priority)
     // TODO: handle access to nonexistent entries with a warning?
     // TODO: handle access with a size mismatch
-    tmp = i_o[adr];
+    tmp = m_i_o[adr];
     return tmp;
 };
 
-// write to shadow memory
-template <typename XLEN, typename FLEN, unsigned int CNUM>
-void hdldbShadow<XLEN, FLEN, CNUM>::memWrite (
+// write to shadow memory map
+template <typename XLEN>
+void MemoryMap<XLEN>::write (
     XLEN                   addr,
     std::vector<std::byte> data
 ) {
@@ -132,7 +110,7 @@ void hdldbShadow<XLEN, FLEN, CNUM>::memWrite (
         };
     };
     // writing to an unmapped IO region (reads have higher priority)
-    i_o[adr] = dat;
+    m_i_o[adr] = dat;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
