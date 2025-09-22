@@ -2,6 +2,9 @@
     "editor.fontFamily": "Fira Code",
     "editor.fontLigatures": true,
 
+    "C_Cpp.default.cppStandard": "c++23",
+    "C_Cpp.default.cStandard": "c23",
+
     "makefile.configureOnOpen": false,
     "files.associations": {
         "**/project.sigasi": "jsonc",
@@ -54,6 +57,7 @@
         "stdexcept": "cpp",
         "streambuf": "cpp",
         "cinttypes": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "iostream": "cpp"
     }
 }
