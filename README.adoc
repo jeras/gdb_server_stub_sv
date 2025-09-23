@@ -445,12 +445,16 @@ Verilator:
 === Various stub implementations
 
 * link:https://tomverbeure.github.io/2022/02/20/GDBWave-Post-Simulation-RISCV-SW-Debugging.html[GDBWave]
-* Zephyr RTOS link:https://github.com/zephyrproject-rtos/zephyr/blob/64ac57abcb90cebdc3e9ed8ea07784134a19a242/subsys/debug/gdbstub/gdbstub.c#L623[gdbstub]
-* OpenOCD link:https://github.com/riscv-collab/riscv-openocd/blob/1aebdf8e3025e8a2ac65a1ebcdccd11448d9b46e/src/server/gdb_server.c#L2917[gdb_server]
-* RISC-V based Virtual Prototype (VP) link:https://github.com/agra-uni-bremen/riscv-vp/tree/48b2f5877b2368cc466fb0da155db349e676c0b0/vp/src/core/common/gdb-mc[gdb-mc]
-* link:https://github.com/qemu/qemu/tree/master/gdbstub[Qemu gdbstub]
-* link:https://github.com/mborgerson/gdbstub[gdbstub]
-* Implement GDB Remote Debug Protocol Stub From Scratch (link:https://github.com/nomtats/gdbserver-stub[gdbserver-stub])
+  link:https://github.com/tomverbeure/gdbwave[written in C],
+* Zephyr RTOS link:https://docs.zephyrproject.org/latest/services/debugging/gdbstub.html[GDB stub]
+  link:https://github.com/zephyrproject-rtos/zephyr/tree/main/subsys/debug/gdbstub[written in C],
+* OpenOCD link:https://openocd.org/doc/html/GDB-and-OpenOCD.html[GDB server]
+  link:https://github.com/riscv-collab/riscv-openocd/blob/riscv/src/server/gdb_server.c[written in C],
+* link:https://github.com/agra-uni-bremen/riscv-vp[RISC-V based Virtual Prototype (VP)]
+  link:https://github.com/agra-uni-bremen/riscv-vp/tree/master/vp/src/core/common/gdb-mc[gdb-mc written in C++],
+* link:https://github.com/qemu/qemu/tree/master/gdbstub[Qemu gdbstub written in C],
+* GDB stub library link:https://github.com/mborgerson/gdbstub[gdbstub] written in C,
+* Implement GDB Remote Debug Protocol Stub From Scratch (link:https://github.com/nomtats/gdbserver-stub[gdbserver-stub]) written in  JavaScript.
 
 * GDB connection flow https://www.embecosm.com/appnotes/ean4/html/ch03s03s01.html
 
