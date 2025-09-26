@@ -22,15 +22,21 @@
 
 // C++ includes
 #include <string>
+#include <array>
+#include <print>
 
-namespace Rsp {
+// HDLDB includes
+#include "Socket.h"
 
-    class Packet {
+namespace rsp {
+
+    class Packet : public Socket {
         // acknowledge presence/absence
         bool m_acknowledge;
+        // remote communication log
+        bool m_log;
 
-        std::string Packet::get () const;
-        int Packet::put (const std::string) const;
+        std::string get () const;
+        int put (const std::string) const;
     };
-
 };

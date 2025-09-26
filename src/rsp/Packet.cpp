@@ -20,41 +20,42 @@
 //    // RSP packet get/send
 //    ////////////////////////////////////////
 
+// C++ includes
+#include <numeric>
+
 // HDLDB includes
 #include "Packet.h"
 
-namespace Rsp {
+namespace rsp {
 
     std::string Packet::get () const {
-            output string pkt,
+        std::string packet;
         int status;
         int unsigned len;
-        byte   buffer [] = new[512];
-        byte   cmd [];
-        string str = "";
-        byte   checksum = 0;
-        string checksum_ref;
-        string checksum_str;
-        // wait for the start character, ignore the rest
+        std::array<std::byte, 512> buffer;
+        std::vector<std::byte> command;
+        std::string str {};
+        std::byte   checksum {0};
+        std::string checksum_ref;
+        std::string checksum_str;
 
         // TODO: error handling?
         do {
-            status = socket_recv(buffer, 0);
-  //          $display("DEBUG: rsp_get_packet: buffer = %p", buffer);
-            str = {str, string(buffer)};
-            len = str.len();
-  //          $display("DEBUG: rsp_get_packet: str = %s", str);
+            status = recv(buffer, 0);
+  //          std::print("DEBUG: rsp_get_packet: buffer = %p", buffer);
+            str += string(buffer);
+            len = str.size();
+  //          std::print("DEBUG: rsp_get_packet: str = %s", str);
         } while (str[len-3] != "#");
 
         // extract packet data from received string
-        pkt = str.substr(1,len-4);
-        if (stub_state.remote_log) {
-            log << "REMOTE: <- " << pkt << std::eol;
-        }
+        packet = str.substr(1,len-4);
+
+        if (m_log) std::println(m_log, "REMOTE: <- {}", packet);
 
         // calculate packet data checksum
-        cmd = new[len-4](byte_array_t(pkt));
-        checksum = cmd.sum();
+        command = new[len-4](byte_array_t(packet));
+        checksum = command.sum();
 
         // Get checksum now
         checksum_ref = str.substr(len-2,len-1);
@@ -62,7 +63,7 @@ namespace Rsp {
         // Verify checksum
         checksum_str = $sformatf("%02h", checksum);
         if (checksum_ref != checksum_str) {
-            $error("Bad checksum. Got 0x%s but was expecting: 0x%s for packet '%s'", checksum_ref, checksum_str, pkt);
+            $error("Bad checksum. Got 0x%s but was expecting: 0x%s for packet '%s'", checksum_ref, checksum_str, packet);
             if (m_acknowledge) {
                 // NACK packet
                 rsp_write("-");
@@ -81,32 +82,20 @@ namespace Rsp {
     int Packet::put (
         const std::string packet
     ) const {
-        int status;
-        byte   ch [] = new[1];
-        byte   checksum = 0;
 
-        if (stub_state.remote_log) {
-            $display("REMOTE: -> %p", pkt);
-        };
+        if (m_log) std::println(m_log, "REMOTE: -> {}", packet);
 
-        // Send packet start
-        rsp_write("$");
+        // calculate checksum
+        std::byte checksum { std::accumulate(cbegin(packet), cend(packet), 0) };
 
-        // Send packet data and calculate checksum
-        foreach (pkt[i]) {
-            checksum += pkt[i];
-            rsp_write(string(pkt[i]));
-        };
+        // send entire packet to stream
+        std::print(stream, "${}#{}", packet, checksum);
 
-        // Send packet end
-        rsp_write("#");
-
-        // Send the checksum
-        rsp_write($sformatf("%02h", checksum));
-
-        // Check acknowledge
-        if (ack) {
-            status = socket_recv(ch, 0);
+        // check acknowledge
+        if (m_acknowledge) {
+            int status;
+            std::byte ch = new[1];
+            status = recv(ch, 0);
             if (ch[0] == "+")  return(0);
             else               return(-1);
         };

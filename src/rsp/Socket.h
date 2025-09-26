@@ -28,22 +28,28 @@ namespace rsp {
         int m_socketFd;
 
         // client file descriptor
-        int client_fd;
+        int m_clientFd;
 
+        // stream
+        int& stream {m_clientFd};
+
+        // constructor
+        Socket(const std::string_view&);
+        // destructor
+        ~Socket;
 
         // create a UNIX socket and mark it as passive
-        int socketUnixListen(const char* name);
+        void listenUnix (const std::string_view&);
         // create a TCP socket and mark it as passive
-        int socket_tcp_listen(const std::uint16_t port);
+        void listenTcp (const std::uint16_t port);
         // accept connection from client (to a given socket fd)
-        int socket_unix_accept ();
+        void acceptUnix ();
         // accept connection from client (to a given TCP socket fd)
-        int socket_tcp_accept ();
+        void acceptTcp ();
         // close connection from client
-        int socket_close ();
+        void close ();
         // transmitter
-        int socket_send (const svOpenArrayHandle data, int flags);
+        int send (const std::byte*, const size_t, int flags);
         // receiver
-        int socket_recv (const svOpenArrayHandle data, int flags);
-
+        int recv (const std::byte*, const size_t, int flags);
 }
