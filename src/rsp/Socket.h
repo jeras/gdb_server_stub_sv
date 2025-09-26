@@ -20,6 +20,13 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+// C includes
+#include <cstdint>
+#include <cstddef>
+
+// C++ includes
+#include <string_view>
+
 namespace rsp {
 
     class Socket {
@@ -36,7 +43,7 @@ namespace rsp {
         // constructor
         Socket(const std::string_view&);
         // destructor
-        ~Socket;
+        ~Socket();
 
         // create a UNIX socket and mark it as passive
         void listenUnix (const std::string_view&);
@@ -46,10 +53,10 @@ namespace rsp {
         void acceptUnix ();
         // accept connection from client (to a given TCP socket fd)
         void acceptTcp ();
-        // close connection from client
-        void close ();
         // transmitter
         int send (const std::byte*, const size_t, int flags);
         // receiver
         int recv (const std::byte*, const size_t, int flags);
-}
+    };
+
+};

@@ -9,7 +9,8 @@ CXXFLAGS = -Wall -g -std=c++23
 TARGET = hdldb
 
 # Source files
-SRCS = hdldb.cpp Shadow.cpp Trace.cpp Protocol.cpp
+#SRCS = hdldb.cpp Shadow.cpp Trace.cpp Protocol.cpp
+SRCS = rsp/Socket.cpp rsp/Packet.cpp test/packet_test.cpp
 
 # Object files
 OBJS = $(SRCS:.cpp=.o)
@@ -17,6 +18,9 @@ OBJS = $(SRCS:.cpp=.o)
 # Default rule to build and run the executable
 all: $(TARGET)
 #all: system-headers $(TARGET)
+
+packet_test: $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJS)
 
 # Rule to link object files into the target executable
 $(TARGET): $(OBJS)

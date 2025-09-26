@@ -23,12 +23,19 @@
 #include <sys/un.h>
 
 // C++ includes
-#include <byte>
+#include <print>
 
 // HDLDB includes
 #include "Socket.h"
 
 namespace rsp {
+
+    // close connection from client
+    Socket::~Socket () {
+        int status { close(m_clientFd) };
+        // TODO: error handling
+        std::print("SOCKET: Closed connection from client.");
+    }
 
     // create a UNIX socket and mark it as passive
     void Socket::listenUnix(const std::string_view& name) {
@@ -36,36 +43,36 @@ namespace rsp {
 
         std::print("SOCKET: Creating UNIX socket {}\n", name);
         // check file name length
-        if (strlen(name) == 0 || strlen(name) > sizeof(server.sun_path)-1) {
-    		throw std::system_error(errno, std::generic_category(std::format("SOCKET: Server UNIX socket path too long: {}\n", name)));
+        if (name.size() == 0 || name.size() > sizeof(server.sun_path)-1) {
+    		throw std::system_error(errno, std::generic_category(), std::format("SOCKET: Server UNIX socket path too long: {}\n", name));
             return;
         }
 
         // delete UNIX socket file if it exists
-        if (remove(name) == -1 && errno != ENOENT) {
-    		throw std::system_error(errno, std::generic_category(std::format("SOCKET: Failed to remove UNIX socket file {}\n", name)));
+        if (remove(name.data()) == -1 && errno != ENOENT) {
+    		throw std::system_error(errno, std::generic_category(), std::format("SOCKET: Failed to remove UNIX socket file {}\n", name));
             return;
         }
 
         // create UNIX socket file descriptor
-        m_SocketFd = socket(AF_UNIX, SOCK_STREAM, 0);
-        std::print("SOCKET: UNIX socket fd = {}\n", m_SocketFd);
+        m_socketFd = socket(AF_UNIX, SOCK_STREAM, 0);
+        std::print("SOCKET: UNIX socket fd = {}\n", m_socketFd);
 
         memset(&server, 0, sizeof(struct sockaddr_un));
         server.sun_family = AF_UNIX;
-        strncpy(server.sun_path, name, sizeof(server.sun_path) - 1);
+        strncpy(server.sun_path, name.data(), sizeof(server.sun_path) - 1);
 
         // bind socket file descriptor to socket
-        if (bind(m_SocketFd, (struct sockaddr *)&server, sizeof(struct sockaddr_un)) != 0) {
-            throw std::system_error(errno, std::generic_category("SOCKET: Bind failed\n"));
+        if (bind(m_socketFd, (struct sockaddr *)&server, sizeof(struct sockaddr_un)) != 0) {
+            throw std::system_error(errno, std::generic_category(), "SOCKET: Bind failed\n");
             return;
         } else {
             std::print("SOCKET: Socket successfully binded...\n");
         }
 
         // mark the socket as passive (accepting connections from clients)
-        if (listen(m_SocketFd, 5) == -1) {
-            throw std::system_error(errno, std::generic_category("SOCKET: Listen failed\n"));
+        if (listen(m_socketFd, 5) == -1) {
+            throw std::system_error(errno, std::generic_category(), "SOCKET: Listen failed\n");
             return;
         } else {
             std::print("SOCKET: Server listening..\n");
@@ -77,12 +84,12 @@ namespace rsp {
         struct sockaddr_in server;
 
         // TCP socket create and verification
-        m_SocketFd = socket(AF_INET, SOCK_STREAM, 0);
-        if (m_SocketFd == -1) {
-    		throw std::system_error(errno, std::generic_category("SOCKET: Server TCP socket creation failed...\n"));
+        m_socketFd = socket(AF_INET, SOCK_STREAM, 0);
+        if (m_socketFd == -1) {
+    		throw std::system_error(errno, std::generic_category(), "SOCKET: Server TCP socket creation failed...\n");
             return;
         } else {
-            std::print("SOCKET: TCP socket fd = %d\n", m_SocketFd);
+            std::print("SOCKET: TCP socket fd = %d\n", m_socketFd);
         }
         bzero(&server, sizeof(server));
 
@@ -92,18 +99,18 @@ namespace rsp {
         server.sin_port = htons(port);
 
         // Binding newly created socket to given IP and verification
-        if ((bind(m_SocketFd, (struct sockaddr *)&server, sizeof(server))) != 0) {
+        if ((bind(m_socketFd, (struct sockaddr *)&server, sizeof(server))) != 0) {
             std::print("SOCKET: Bind failed with errno = %0d.\n", errno);
             perror("SOCKET: socket bind:");
-            return -1;
+            return;
         } else {
             std::print("SOCKET: Socket successfully binded...\n");
         }
 
         // Now server is ready to listen and verification
-        if ((listen(m_SocketFd, 5)) != 0) {
+        if ((listen(m_socketFd, 5)) != 0) {
             std::print("SOCKET: Listen failed.\n");
-            return -1;
+            return;
         } else {
             std::print("SOCKET: Server listening..\n");
         }
@@ -112,7 +119,7 @@ namespace rsp {
     // accept connection from client (to a given socket fd)
     void Socket::acceptUnix () {
         std::print("SOCKET: Waiting for client to connect...\n");
-        m_clientFd = accept(m_SocketFd, NULL, NULL);
+        m_clientFd = accept(m_socketFd, NULL, NULL);
         if (m_clientFd < 0) {
             std::print("SOCKET: Server accept failed with errno = %d.\n", errno);
             perror("SOCKET: socket accept:");
@@ -124,13 +131,11 @@ namespace rsp {
 
     // accept connection from client (to a given TCP socket fd)
     void Socket::acceptTcp () {
-        int len;
         struct sockaddr_in client;
-
-        len = sizeof(client);
+        socklen_t len = sizeof(client);
 
         // Accept the data packet from client and verification
-        m_clientFd = accept(m_SocketFd, (struct sockaddr *)&client, &len);
+        m_clientFd = accept(m_socketFd, (struct sockaddr *)&client, &len);
         if (m_clientFd < 0) {
             std::print("SOCKET: Server accept failed with errno = %d.\n", errno);
             perror("SOCKET: socket accept:");
@@ -151,19 +156,13 @@ namespace rsp {
         }
     }
 
-    // close connection from client
-    void Socket::close () {
-        return close(m_clientFd);
-        std::print("SOCKET: Closed connection from client.");
-    }
-
-        // transmitter
+    // transmitter
     int Socket::send (const std::byte* data, const size_t size, int flags) {
         int status;
         status = send(m_clientFd, data, size, flags);
         if (status == -1) {
             // https://en.wikipedia.org/wiki/Errno.h
-            throw std::system_error(errno, std::generic_category("SEND failed"));
+            throw std::system_error(errno, std::generic_category(), "SEND failed");
             return -1;
         }
         return status;
@@ -174,7 +173,7 @@ namespace rsp {
         int status = recv(m_clientFd, data, size, flags);
         if (status == -1) {
             // https://en.wikipedia.org/wiki/Errno.h
-            throw std::system_error(errno, std::generic_category("RECV failed"));
+            throw std::system_error(errno, std::generic_category(), "RECV failed");
             return -1;
         }
         return status;
