@@ -24,7 +24,7 @@ packet_test: $(OBJS)
 
 # Rule to link object files into the target executable
 $(TARGET): $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJS)
 
 # Rule to compile .cpp files into .o files
 %.o: %.cpp
@@ -32,4 +32,4 @@ $(TARGET): $(OBJS)
 
 # Clean rule to remove generated files
 clean:
-	rm $(TARGET) $(OBJS)
+	rm packet_test $(TARGET) $(OBJS)

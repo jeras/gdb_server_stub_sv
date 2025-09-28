@@ -22,21 +22,28 @@
 
 // C++ includes
 #include <string>
-#include <array>
-#include <print>
 
 // HDLDB includes
-#include "Socket.h"
+#include "Socket.hpp"
 
 namespace rsp {
 
     class Packet : public Socket {
+        const std::array<std::byte, 1>  ACK { static_cast<std::byte>('+') };
+        const std::array<std::byte, 1> NACK { static_cast<std::byte>('-') };
+
+        std::array<std::byte, 512> m_buffer;
+
         // acknowledge presence/absence
         bool m_acknowledge;
         // remote communication log
-        bool m_log;
+        std::string m_log;
 
-        std::string get () const;
-        int put (const std::string) const;
+        // logging
+        void log(std::string_view) const { };
+
+        // handling packets
+        std::string_view get ();
+        void put (std::string_view) const;
     };
 };

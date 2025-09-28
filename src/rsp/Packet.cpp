@@ -22,83 +22,68 @@
 
 // C++ includes
 #include <numeric>
+#include <array>
+#include <vector>
+#include <print>
+#include <stdexcept>
 
 // HDLDB includes
-#include "Packet.h"
+#include "Packet.hpp"
 
 namespace rsp {
 
-    std::string Packet::get () const {
-        std::string packet;
-        int status;
-        int unsigned len;
-        std::array<std::byte, 512> buffer;
-        std::vector<std::byte> command;
-        std::string str {};
-        std::byte   checksum {0};
-        std::string checksum_ref;
-        std::string checksum_str;
-
-        // TODO: error handling?
+    std::string_view Packet::get () {
+        ssize_t status;
+        size_t size = 0;
         do {
-            status = recv(buffer, 0);
-  //          std::print("DEBUG: rsp_get_packet: buffer = %p", buffer);
-            str += string(buffer);
-            len = str.size();
-  //          std::print("DEBUG: rsp_get_packet: str = %s", str);
-        } while (str[len-3] != "#");
+            status = recv({m_buffer.data() + size, m_buffer.size() - size}, 0);
+            size += status;
+        } while (m_buffer[size-3] != static_cast<std::byte>('#'));
 
-        // extract packet data from received string
-        packet = str.substr(1,len-4);
+        std::string_view packet { reinterpret_cast<char const*>(m_buffer.data()), static_cast<size_t>(size) };
+        std::string_view packet_data     = packet.substr(1, size-4);
+        std::string_view packet_checksum = packet.substr(size-4, 2);
+        uint8_t checksum_pkt = static_cast<uint8_t>(std::stoi(packet_checksum.data()));
 
-        if (m_log) std::println(m_log, "REMOTE: <- {}", packet);
+        log(std::format("REMOTE: <- {}", packet_data));
 
-        // calculate packet data checksum
-        command = new[len-4](byte_array_t(packet));
-        checksum = command.sum();
-
-        // Get checksum now
-        checksum_ref = str.substr(len-2,len-1);
+        // calculate payload checksum
+        std::span payload { reinterpret_cast<uint8_t const*>(packet_data.data()), packet_data.size() };
+        uint8_t checksum_ref { static_cast<uint8_t>(std::accumulate(cbegin(payload), cend(payload), 0)) };
 
         // Verify checksum
-        checksum_str = $sformatf("%02h", checksum);
-        if (checksum_ref != checksum_str) {
-            $error("Bad checksum. Got 0x%s but was expecting: 0x%s for packet '%s'", checksum_ref, checksum_str, packet);
-            if (m_acknowledge) {
-                // NACK packet
-                rsp_write("-");
-            }
-            return (-1);
-        }
-        else {
-            if (ack) {
-                // ACK packet
-                rsp_write("+");
-            }
-            return 0;
+        if (checksum_pkt == checksum_ref) {
+            if (m_acknowledge)  send(ACK, 0);
+        } else {
+            if (m_acknowledge)  send(NACK, 0);
+            throw std::runtime_error { "Sending NACK (due to parity error)." };
         };
+        return packet_data;
     };
 
-    int Packet::put (
-        const std::string packet
-    ) const {
+    void Packet::put (std::string_view packet_data) const {
+        log(std::format("REMOTE: -> {}", packet_data));
 
-        if (m_log) std::println(m_log, "REMOTE: -> {}", packet);
+        // calculate payload checksum
+        std::span payload { reinterpret_cast<uint8_t const*>(packet_data.data()), packet_data.size() };
+        uint8_t checksum { static_cast<uint8_t>(std::accumulate(cbegin(payload), cend(payload), 0)) };
 
-        // calculate checksum
-        std::byte checksum { std::accumulate(cbegin(packet), cend(packet), 0) };
+        // format packet
+        std::string packet { std::format("${}#{:02x}", packet_data, checksum) };
 
-        // send entire packet to stream
-        std::print(stream, "${}#{}", packet, checksum);
+        // send packet
+        ssize_t status;
+        size_t size = 0;
+        do {
+            status = send({ reinterpret_cast<std::byte const*>(packet.data() + size), packet.size() - size }, 0);
+            size += status;
+        } while (size < packet.size());
 
         // check acknowledge
         if (m_acknowledge) {
-            int status;
-            std::byte ch = new[1];
-            status = recv(ch, 0);
-            if (ch[0] == "+")  return(0);
-            else               return(-1);
+            std::array<std::byte, 1> ack;
+            ssize_t status = recv(ack, 0);
+            if (ack == NACK)  throw std::runtime_error { "Received NACK." };
         };
     };
-
 };

@@ -26,15 +26,18 @@
 #include <print>
 
 // HDLDB includes
-#include "Socket.h"
+#include "Socket.hpp"
 
 namespace rsp {
 
     // close connection from client
     Socket::~Socket () {
         int status { close(m_clientFd) };
-        // TODO: error handling
-        std::print("SOCKET: Closed connection from client.");
+        if (status == -1) {
+            throw std::system_error(errno, std::generic_category(), "CLOSE failed");
+        } else {
+            std::print("SOCKET: Closed connection from client.");
+        }
     }
 
     // create a UNIX socket and mark it as passive
@@ -157,9 +160,8 @@ namespace rsp {
     }
 
     // transmitter
-    int Socket::send (const std::byte* data, const size_t size, int flags) {
-        int status;
-        status = send(m_clientFd, data, size, flags);
+    ssize_t Socket::send (std::span<const std::byte> data, int flags) const {
+        ssize_t status { ::send(m_clientFd, data.data(), data.size(), flags) };
         if (status == -1) {
             // https://en.wikipedia.org/wiki/Errno.h
             throw std::system_error(errno, std::generic_category(), "SEND failed");
@@ -169,8 +171,8 @@ namespace rsp {
     }
 
     // receiver
-    int Socket::recv (const std::byte* data, const size_t size, int flags) {
-        int status = recv(m_clientFd, data, size, flags);
+    ssize_t Socket::recv (std::span<std::byte> data, int flags) const {
+        ssize_t status { ::recv(m_clientFd, data.data(), data.size(), flags) };
         if (status == -1) {
             // https://en.wikipedia.org/wiki/Errno.h
             throw std::system_error(errno, std::generic_category(), "RECV failed");

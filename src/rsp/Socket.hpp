@@ -26,6 +26,7 @@
 
 // C++ includes
 #include <string_view>
+#include <span>
 
 namespace rsp {
 
@@ -36,9 +37,6 @@ namespace rsp {
 
         // client file descriptor
         int m_clientFd;
-
-        // stream
-        int& stream {m_clientFd};
 
         // constructor
         Socket(const std::string_view&);
@@ -53,10 +51,15 @@ namespace rsp {
         void acceptUnix ();
         // accept connection from client (to a given TCP socket fd)
         void acceptTcp ();
+
+    protected:
+        // stream
+        int& stream {m_clientFd};
+
         // transmitter
-        int send (const std::byte*, const size_t, int flags);
+        ssize_t send (std::span<const std::byte>, int flags) const;
         // receiver
-        int recv (const std::byte*, const size_t, int flags);
+        ssize_t recv (std::span<      std::byte>, int flags) const;
     };
 
 };
