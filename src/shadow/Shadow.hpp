@@ -21,11 +21,11 @@
 #include <utility>
 
 // HDLDB includes
-#include "Registers.h"
-#include "Instruction.h"
-#include "Point.h"
-#include "AddressMap.h"
-#include "MemoryMap.h"
+#include "Registers.hpp"
+#include "Instruction.hpp"
+#include "Point.hpp"
+#include "AddressMap.hpp"
+#include "MemoryMap.hpp"
 
 namespace hdldb {
 

@@ -15,7 +15,7 @@
 #include <map>
 
 // HDLDB includes
-#include "AddressMap.h"
+#include "AddressMap.hpp"
 
 namespace HdlDb {
 

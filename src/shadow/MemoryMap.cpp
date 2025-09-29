@@ -7,8 +7,8 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 // HDLDB includes
-#include "AddressMap.h"
-#include "MemoryMap.h"
+#include "AddressMap.hpp"
+#include "MemoryMap.hpp"
 
 namespace HdlDb {
 

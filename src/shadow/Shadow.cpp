@@ -6,7 +6,7 @@
 // Licensed under CERN-OHL-P v2 or later
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "Shadow.h"
+#include "Shadow.hpp"
 
 namespace hdldb {
 
