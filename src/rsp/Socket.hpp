@@ -32,6 +32,9 @@ namespace rsp {
 
     class Socket {
 
+        // depends on socket name
+        bool m_tcp;
+
         // socket file descriptor
         int m_socketFd;
 
@@ -39,22 +42,25 @@ namespace rsp {
         int m_clientFd;
 
         // constructor
-        Socket(const std::string_view&);
+        Socket(std::string_view);
         // destructor
         ~Socket();
 
         // create a UNIX socket and mark it as passive
-        void listenUnix (const std::string_view&);
+        void listenUnix (std::string_view);
         // create a TCP socket and mark it as passive
         void listenTcp (const std::uint16_t port);
-        // accept connection from client (to a given socket fd)
+        // accept UNIX socket connection from client
         void acceptUnix ();
-        // accept connection from client (to a given TCP socket fd)
+        // accept TCP socket connection from client
         void acceptTcp ();
 
     protected:
         // stream
         int& stream {m_clientFd};
+
+        // accept UNIX/TCP connection from client
+        void accept ();
 
         // transmitter
         ssize_t send (std::span<const std::byte>, int flags) const;

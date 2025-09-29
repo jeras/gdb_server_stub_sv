@@ -26,13 +26,18 @@
 #include <vector>
 #include <print>
 #include <stdexcept>
+#include <iostream>
 
 // HDLDB includes
 #include "Packet.hpp"
 
 namespace rsp {
 
-    std::string_view Packet::get () {
+    void Packet::log (std::string_view packet_data) const {
+        std::cout << packet_data;
+    };
+
+    std::string_view Packet::rx (bool acknowledge) {
         ssize_t status;
         size_t size = 0;
         do {
@@ -53,15 +58,15 @@ namespace rsp {
 
         // Verify checksum
         if (checksum_pkt == checksum_ref) {
-            if (m_acknowledge)  send(ACK, 0);
+            if (acknowledge)  send(ACK, 0);
         } else {
-            if (m_acknowledge)  send(NACK, 0);
+            if (acknowledge)  send(NACK, 0);
             throw std::runtime_error { "Sending NACK (due to parity error)." };
         };
         return packet_data;
     };
 
-    void Packet::put (std::string_view packet_data) const {
+    void Packet::tx (std::string_view packet_data, bool acknowledge) const {
         log(std::format("REMOTE: -> {}", packet_data));
 
         // calculate payload checksum
@@ -80,7 +85,7 @@ namespace rsp {
         } while (size < packet.size());
 
         // check acknowledge
-        if (m_acknowledge) {
+        if (acknowledge) {
             std::array<std::byte, 1> ack;
             ssize_t status = recv(ack, 0);
             if (ack == NACK)  throw std::runtime_error { "Received NACK." };

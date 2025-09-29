@@ -6,20 +6,6 @@
 // Licensed under CERN-OHL-P v2 or later
 ///////////////////////////////////////////////////////////////////////////////
 
-//    ////////////////////////////////////////
-//    // RSP character get/put
-//    ////////////////////////////////////////
-//
-//        function automatic void rsp_write (string str);
-//            int status;
-//            byte buffer [] = new[str.len()](byte_array_t'(str));
-//            status = socket_send(buffer, 0);
-//        endfunction: rsp_write
-//
-//    ////////////////////////////////////////
-//    // RSP packet get/send
-//    ////////////////////////////////////////
-
 // C++ includes
 #include <string>
 
@@ -34,16 +20,15 @@ namespace rsp {
 
         std::array<std::byte, 512> m_buffer;
 
-        // acknowledge presence/absence
-        bool m_acknowledge;
         // remote communication log
         std::string m_log;
 
         // logging
-        void log(std::string_view) const { };
+        void log(std::string_view) const;
 
+    protected:
         // handling packets
-        std::string_view get ();
-        void put (std::string_view) const;
+        std::string_view rx (bool acknowledge);
+        void tx (std::string_view, bool acknowledge) const;
     };
 };

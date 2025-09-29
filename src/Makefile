@@ -10,7 +10,7 @@ TARGET = hdldb
 
 # Source files
 #SRCS = hdldb.cpp Shadow.cpp Trace.cpp Protocol.cpp
-SRCS = rsp/Socket.cpp rsp/Packet.cpp test/packet_test.cpp
+SRCS = rsp/Socket.cpp rsp/Packet.cpp rsp/Protocol.cpp test/packet_test.cpp
 
 # Object files
 OBJS = $(SRCS:.cpp=.o)
