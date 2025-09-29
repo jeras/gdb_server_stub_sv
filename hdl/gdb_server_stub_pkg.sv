@@ -698,14 +698,10 @@ package gdb_server_stub_pkg;
         //    $display("DBG: rsp_mem_read: pkt = %s", pkt);
 
             // memory address and length
-`ifdef VERILATOR
-            code = $sscanf(pkt, "m%h,%h", adr, len);
-`else
             case (XLEN)
                 32: code = $sscanf(pkt, "m%8h,%8h", adr, len);
                 64: code = $sscanf(pkt, "m%16h,%16h", adr, len);
             endcase
-`endif
 
         //    $display("DBG: rsp_mem_read: adr = %08x, len=%08x", adr, len);
 
@@ -745,14 +741,10 @@ package gdb_server_stub_pkg;
         //    $display("DBG: rsp_mem_write: pkt = %s", pkt);
 
             // memory address and length
-`ifdef VERILATOR
-            code = $sscanf(pkt, "M%h,%h:", adr, len);
-`else
             case (XLEN)
                 32: code = $sscanf(pkt, "M%8h,%8h:", adr, len);
                 64: code = $sscanf(pkt, "M%16h,%16h:", adr, len);
             endcase
-`endif
             //    $display("DBG: rsp_mem_write: adr = 'h%08h, len = 'd%0d", adr, len);
 
                 // remove the header from the packet, only data remains
@@ -762,11 +754,7 @@ package gdb_server_stub_pkg;
             // write memory
             for (SIZE_T i=0; i<len; i++) begin
             //    $display("DBG: rsp_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, dut_mem_read(adr+i));
-`ifdef VERILATOR
-                status = $sscanf(str.substr(i*2, i*2+1), "%2h", dat);
-`else
                 status = $sscanf(str.substr(i*2, i*2+1), "%h", dat);
-`endif
             //    $display("DBG: rsp_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, dut_mem_read(adr+i));
                 // TODO handle memory access errors
                 // NOTE: memory writes are always done to both DUT and shadow
@@ -795,14 +783,10 @@ package gdb_server_stub_pkg;
             status = rsp_get_packet(pkt);
 
             // memory address and length
-`ifdef VERILATOR
-            code = $sscanf(pkt, "x%h,%h", adr, len);
-`else
             case (XLEN)
                 32: code = $sscanf(pkt, "x%8h,%8h", adr, len);
                 64: code = $sscanf(pkt, "x%16h,%16h", adr, len);
             endcase
-`endif
 
             // read memory
             pkt = {len{8'h00}};
@@ -831,14 +815,10 @@ package gdb_server_stub_pkg;
             status = rsp_get_packet(pkt);
 
             // memory address and length
-`ifdef VERILATOR
-            code = $sscanf(pkt, "X%h,%h:", adr, len);
-`else
             case (XLEN)
                 32: code = $sscanf(pkt, "X%8h,%8h:", adr, len);
                 64: code = $sscanf(pkt, "X%16h,%16h:", adr, len);
             endcase
-`endif
 
             // write memory
             for (SIZE_T i=0; i<len; i++) begin
@@ -900,14 +880,10 @@ package gdb_server_stub_pkg;
 
             // GPR
             for (int unsigned i=0; i<REGN; i++) begin
-`ifdef VERILATOR
-                status = $sscanf(pkt.substr(i*len, i*len+len-1), "%h", val);
-`else
                 case (XLEN)
                   32: status = $sscanf(pkt.substr(i*len, i*len+len-1), "%8h", val);
                   64: status = $sscanf(pkt.substr(i*len, i*len+len-1), "%16h", val);
                 endcase
-`endif
                 // swap byte order since they are sent LSB first
                 // NOTE: register writes are always done to both DUT and shadow
                 dut_reg_write(i, {<<8{val}});
@@ -963,14 +939,10 @@ package gdb_server_stub_pkg;
             status = rsp_get_packet(pkt);
 
             // register index and value
-`ifdef VERILATOR
-            status = $sscanf(pkt, "P%h=%h", idx, val);
-`else
             case (XLEN)
                 32: status = $sscanf(pkt, "P%h=%8h", idx, val);
                 64: status = $sscanf(pkt, "P%h=%16h", idx, val);
             endcase
-`endif
 
             // swap byte order since they are sent LSB first
             // NOTE: register writes are always done to both DUT and shadow
@@ -1002,14 +974,10 @@ package gdb_server_stub_pkg;
             status = rsp_get_packet(pkt);
 
             // breakpoint/watchpoint
-`ifdef VERILATOR
-            status = $sscanf(pkt, "z%h,%h,%h", ptype, addr, pkind);
-`else
             case (XLEN)
                 32: status = $sscanf(pkt, "z%h,%8h,%h", ptype, addr, pkind);
                 64: status = $sscanf(pkt, "z%h,%16h,%h", ptype, addr, pkind);
             endcase
-`endif
 
             void'(shd.point_remove(ptype, addr, pkind));
             return(1);
@@ -1026,14 +994,10 @@ package gdb_server_stub_pkg;
             status = rsp_get_packet(pkt);
 
             // breakpoint/watchpoint
-`ifdef VERILATOR
-            status = $sscanf(pkt, "Z%h,%h,%h", ptype, addr, pkind);
-`else
             case (XLEN)
                 32: status = $sscanf(pkt, "Z%h,%8h,%h", ptype, addr, pkind);
                 64: status = $sscanf(pkt, "Z%h,%16h,%h", ptype, addr, pkind);
             endcase
-`endif
 
             void'(shd.point_insert(ptype, addr, pkind));
             return(1);
