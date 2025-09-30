@@ -17,18 +17,22 @@
 namespace rsp {
 
     template <typename XLEN>
-    Protocol<XLEN>::Protocol (std::string_view name) {
-        m_packet = new Packet(name);
+    Protocol<XLEN>::Protocol (std::string_view name) :
+        Packet(name)
+    {
     }
 
     template <typename XLEN>
+    Protocol<XLEN>::~Protocol () { };
+
+    template <typename XLEN>
     std::string_view Protocol<XLEN>::rx () {
-        return m_packet.rx(m_state.acknowledge);
+        return Packet::rx(m_state.acknowledge);
     }
 
     template <typename XLEN>
     void Protocol<XLEN>::tx (std::string_view packet) {
-        m_packet.tx(packet, m_state.acknowledge);
+        Packet::tx(packet, m_state.acknowledge);
     }
 
     ////////////////////////////////////////
@@ -36,16 +40,17 @@ namespace rsp {
     ////////////////////////////////////////
 
     template <typename XLEN>
-    std::span<std::byte> Protocol<XLEN>::hex2bin (std::string_view hex) const {
+    std::vector<std::byte> Protocol<XLEN>::hex2bin (std::string_view hex) const {
         std::vector<std::byte> bin { hex.size()/2 };
         for (size_t i = 0; i < hex.length(); i += 2) {
             std::string_view str = hex.substr(i, 2);
-            std::byte byte = static_cast<uint8_t>(std::stoi(str, nullptr, 16));
+            std::byte byte = static_cast<uint8_t>(std::stoi(str.data(), nullptr, 16));
             bin.push_back(byte);
         }
         return bin;
     }
 
+    template <typename XLEN>
     std::string Protocol<XLEN>::bin2hex (std::span<std::byte> bin) const {
         return std::format("{::02x}", bin);
     }
@@ -56,21 +61,20 @@ namespace rsp {
 
     template <typename XLEN>
     void Protocol<XLEN>::mem_read (std::string_view packet) {
+        // memory address and length
         int code;
         XLEN addr;
         XLEN size;
-        std::span<std::byte> data;
-        std::string_view response;
-
-        // memory address and length
-        switch (XLEN) {
-            case 32: code = $sscanf(pkt, "m%8h,%8h", &addr, &size);
-            case 64: code = $sscanf(pkt, "m%16h,%16h", &addr, &size);
+        switch (sizeof(XLEN)*8) {
+            case 32: code = std::sscanf(packet.data(), "m%8x,%8x", &addr, &size);
+            case 64: code = std::sscanf(packet.data(), "m%16x,%16x", &addr, &size);
         }
 
     //    $display("DBG: rsp_mem_read: adr = %08x, len=%08x", adr, len);
 
-        if (stub_state.memory) {
+        // read from memory
+        std::span<std::byte> data;
+        if (m_state.dut_memory) {
             data = dut_mem_read(addr, size);
         } else {
             data = shadow.mem_read(addr, size);
@@ -83,34 +87,23 @@ namespace rsp {
 
     template <typename XLEN>
     void Protocol<XLEN>::mem_write   (std::string_view packet) {
+        // memory address and length
         int code;
-        string str;
-        int status;
         XLEN adr;
         XLEN len;
-        byte   dat;
-
-        // memory address and length
-        case (XLEN)
-            32: code = $sscanf(pkt, "M%8h,%8h:", adr, len);
-            64: code = $sscanf(pkt, "M%16h,%16h:", adr, len);
-        endcase
+        switch (sizeof(XLEN)*8) {
+            case 32: code = std::sscanf(packet.data(), "M%8x,%8x:", &adr, &len);
+            case 64: code = std::sscanf(packet.data(), "M%16x,%16x:", &adr, &len);
+        }
         //    $display("DBG: rsp_mem_write: adr = 'h%08h, len = 'd%0d", adr, len);
 
-            // remove the header from the packet, only data remains
-            str = pkt.substr(pkt.len() - 2*len, pkt.len() - 1);
+        // remove the header from the packet, only data remains
+        std::string_view hex { packet.substr(packet.size() - 2*len, 2*len) };
         //    $display("DBG: rsp_mem_write: str = %s", str);
 
         // write memory
-        for (SIZE_T i=0; i<len; i++) begin
-        //    $display("DBG: rsp_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, dut_mem_read(adr+i));
-            status = $sscanf(str.substr(i*2, i*2+1), "%h", dat);
-        //    $display("DBG: rsp_mem_write: adr+i = 'h%08h, mem[adr+i] = 'h%02h", adr+i, dut_mem_read(adr+i));
-            // TODO handle memory access errors
-            // NOTE: memory writes are always done to both DUT and shadow
-            void'(    dut_mem_write(adr+i,                 dat  ));
-            void'(shd.mem_write(adr+i, byte_array_t'('{dat})));
-        end
+//        dut_mem_write(adr+i,                 dat  ));
+        shadow.mem_write(adr, hex2bin(hex));
 
         // send response
         tx("OK");
@@ -125,7 +118,7 @@ namespace rsp {
         // register value
         std::span<XLEN> val;
         // read DUT/shadow
-        if (stub_state.register) {
+        if (m_state.dut_register) {
             val = dut_reg_read();
         } else {
             val = shadow.reg_read();
@@ -139,7 +132,7 @@ namespace rsp {
     template <typename XLEN>
     void Protocol<XLEN>::reg_writeall(std::string_view packet) {
         // register value
-        std::span<XLEN> val = static_cast<XLEN> hex2bin(packet.substr(1, packet.size()-1));
+        std::span<XLEN> val { static_cast<XLEN> hex2bin(packet.substr(1, packet.size()-1)) };
 
         // write DUT/shadow
         dut_reg_writeall(val);
@@ -157,14 +150,14 @@ namespace rsp {
     void Protocol<XLEN>::reg_readone (std::string_view packet) {
         // register index
         int unsigned idx;
-        int status = $sscanf(packet, "p%x", &idx);
+        int status = std::sscanf(packet.data(), "p%x", &idx);
 
         // read DUT/shadow
         XLEN val;
         if (m_state.register) {
             val = dut_reg_readone(idx);
         } else {
-            val = shd.reg_readone(idx);
+            val = shadow.reg_readone(idx);
         }
 
         // send response
@@ -176,14 +169,14 @@ namespace rsp {
     void Protocol<XLEN>::reg_writeone(std::string_view packet) {
         // register index
         int unsigned idx;
-        int status = std::sscanf(packet, "P%x=", &idx);
+        int status = std::sscanf(packet.data(), "P%x=", &idx);
 
         // register value
         XLEN val = static_cast<XLEN> hex2bin(packet.substr(packet.size()-sizeof(XLEN), sizeof(XLEN)));
 
         // write DUT/shadow
         dut_reg_writeone(idx, val);
-        shd.reg_writeone(idx, val);
+        shadow.reg_writeone(idx, val);
         // debug
         switch (XLEN) {
             case 32: cout << std::format("DEBUG: GPR[{0d}] <= 32'h{08x}", idx, val);
@@ -223,13 +216,13 @@ namespace rsp {
                 XLEN    addr;
         shadow::pkind_t kind;
 
-        switch (XLEN) {
-            case 32: status = std::sscanf(packet, "z%x,%8x,%x", &type, &addr, &kind);
-            case 64: status = std::sscanf(packet, "z%x,%16x,%x", &type, &addr, &kind);
+        switch (sizeof(XLEN)*8) {
+            case 32: status = std::sscanf(packet.data(), "z%x,%8x,%x", &type, &addr, &kind);
+            case 64: status = std::sscanf(packet.data(), "z%x,%16x,%x", &type, &addr, &kind);
         }
 
         shadow.point_remove(type, addr, kind);
-        tx.("OK");
+        tx("OK");
     };
 
     template <typename XLEN>
@@ -239,9 +232,9 @@ namespace rsp {
                 XLEN    addr;
         shadow::pkind_t kind;
 
-        switch (XLEN) {
-            case 32: status = std::sscanf(packet, "Z%x,%8x,%x", &type, &addr, &kind);
-            case 64: status = std::sscanf(packet, "Z%x,%16x,%x", &type, &addr, &kind);
+        switch (sizeof(XLEN)*8) {
+            case 32: status = std::sscanf(packet.data(), "Z%x,%8x,%x", &type, &addr, &kind);
+            case 64: status = std::sscanf(packet.data(), "Z%x,%16x,%x", &type, &addr, &kind);
         }
 
         shadow.point_insert(type, addr, kind);
@@ -272,7 +265,7 @@ namespace rsp {
         tx("OK");
 
         // re-initialize stub state
-        //stub_state = STUB_STATE_INIT;
+        //m_state = STUB_STATE_INIT;
 
         // stop HDL simulation, so the HDL simulator can render waveforms
         //cout << std::format("GDB: detached, stopping HDL simulation from within state {}.", shadow.sig.name);

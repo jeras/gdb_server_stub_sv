@@ -15,14 +15,16 @@
 namespace rsp {
 
     template <typename XLEN>
-    class Protocol {
+    class Protocol : Packet {
 
-        struct m_state {
+        struct State {
             bool acknowledge;
             bool extended;
+            bool dut_register;
+            bool dut_memory;
         };
 
-        Packet m_packet;
+        State m_state;
 
         // constructor/destructor
         Protocol (std::string_view);
@@ -31,7 +33,7 @@ namespace rsp {
         std::string_view rx ();
         void tx (std::string_view);
 
-        std::span<std::byte> hex2bin (std::string_view) const;
+        std::vector<std::byte> hex2bin (std::string_view) const;
         std::string bin2hex (std::span<std::byte>) const;
 
         // packet parsers
@@ -58,5 +60,12 @@ namespace rsp {
 
         // packet parser
         void parse       (std::string_view);
+
+        // dummy placeholders
+        void dut_reset_assert() {};
+        std::span<std::byte> dut_mem_read (XLEN) {};
+        void dut_mem_write (XLEN, std::span<std::byte>) {};
+        XLEN dut_reg_read (int unsigned) {};
+        void dut_reg_write (int unsigned, XLEN) {};
     };
 };
