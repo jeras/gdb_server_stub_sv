@@ -122,47 +122,28 @@ namespace rsp {
 
     template <typename XLEN>
     void Protocol<XLEN>::reg_readall (std::string_view packet) {
-        int status;
-        logic [XLEN-1:0] val;  // 4-state so GDB can iterpret 'x
-
-        pkt = "";
-        for (int unsigned i=0; i<REGN; i++) begin
-            // swap byte order since they are sent LSB first
-            if (stub_state.register) begin
-                val = {<<8{dut_reg_read(i)}};
-            end else begin
-                val = {<<8{shd.reg_read(i)}};
-            end
-            case (XLEN)
-                32: response = {pkt, $sformatf("%08h", val)};
-                64: response = {pkt, $sformatf("%016h", val)};
-            endcase
-        end
+        // register value
+        std::span<XLEN> val;
+        // read DUT/shadow
+        if (stub_state.register) {
+            val = dut_reg_read();
+        } else {
+            val = shadow.reg_read();
+        }
 
         // send response
+        std::string_view response { bin2hex(val) };
         tx(response);
     };
 
     template <typename XLEN>
     void Protocol<XLEN>::reg_writeall(std::string_view packet) {
-        string pkt;
-        int unsigned len = XLEN/8*2;
-        bit [XLEN-1:0] val;
+        // register value
+        std::span<XLEN> val = static_cast<XLEN> hex2bin(packet.substr(1, packet.size()-1));
 
-        // remove command
-        pkt = pkt.substr(1, pkt.len()-1);
-
-        // GPR
-        for (int unsigned i=0; i<REGN; i++) {
-            case (XLEN)
-                32: status = $sscanf(pkt.substr(i*len, i*len+len-1), "%8h", val);
-                64: status = $sscanf(pkt.substr(i*len, i*len+len-1), "%16h", val);
-            endcase
-            // swap byte order since they are sent LSB first
-            // NOTE: register writes are always done to both DUT and shadow
-            dut_reg_write(i, {<<8{val}});
-            shd.reg_write(i, {<<8{val}});
-        }
+        // write DUT/shadow
+        dut_reg_writeall(val);
+        shadow.reg_writeall(val);
 
         // send response
         tx("OK");
@@ -174,45 +155,40 @@ namespace rsp {
 
     template <typename XLEN>
     void Protocol<XLEN>::reg_readone (std::string_view packet) {
-        int status;
-        int unsigned idx;
-        XLEN val;
-
         // register index
-        status = $sscanf(pkt, "p%h", &idx);
+        int unsigned idx;
+        int status = $sscanf(packet, "p%x", &idx);
 
-        // swap byte order since they are sent LSB first
+        // read DUT/shadow
+        XLEN val;
         if (m_state.register) {
-            val = dut_reg_read(idx);
+            val = dut_reg_readone(idx);
         } else {
-            val = shd.reg_read(idx);
+            val = shd.reg_readone(idx);
         }
-        std::string_view response { bin2hex({ &val, sizeof(XLEN)}) };
 
         // send response
+        std::string_view response { bin2hex({ &val, sizeof(XLEN)}) };
         tx(response);
     };
 
     template <typename XLEN>
     void Protocol<XLEN>::reg_writeone(std::string_view packet) {
-        int status;
+        // register index
         int unsigned idx;
-        XLEN val;
+        int status = std::sscanf(packet, "P%x=", &idx);
 
-        // register index and value
+        // register value
+        XLEN val = static_cast<XLEN> hex2bin(packet.substr(packet.size()-sizeof(XLEN), sizeof(XLEN)));
+
+        // write DUT/shadow
+        dut_reg_writeone(idx, val);
+        shd.reg_writeone(idx, val);
+        // debug
         switch (XLEN) {
-            case 32: status = $sscanf(packet, "P%h=%8h", &idx, &val);
-            case 64: status = $sscanf(packet, "P%h=%16h", &idx, &val);
+            case 32: cout << std::format("DEBUG: GPR[{0d}] <= 32'h{08x}", idx, val);
+            case 64: cout << std::format("DEBUG: GPR[{0d}] <= 64'h{016x}", idx, val);
         }
-
-        // swap byte order since they are sent LSB first
-        // NOTE: register writes are always done to both DUT and shadow
-        dut_reg_write(idx, {<<8{val}});
-        shd.reg_write(idx, {<<8{val}});
-    //    case (XLEN)
-    //        32: $display("DEBUG: GPR[%0d] <= 32'h%08h", idx, val);
-    //        64: $display("DEBUG: GPR[%0d] <= 64'h%016h", idx, val);
-    //    endcase
 
         // send response
         tx("OK");
@@ -222,12 +198,18 @@ namespace rsp {
     // RSP forward/reverse step/continue
     ///////////////////////////////////////
 
+    template <typename XLEN>
     void Protocol<XLEN>::run_step    (std::string_view packet) {};
+    template <typename XLEN>
     void Protocol<XLEN>::run_continue(std::string_view packet) {};
+    template <typename XLEN>
     void Protocol<XLEN>::run_backward(std::string_view packet) {};
 
+    template <typename XLEN>
     void Protocol<XLEN>::signal      (std::string_view packet) {};
+    template <typename XLEN>
     void Protocol<XLEN>::query       (std::string_view packet) {};
+    template <typename XLEN>
     void Protocol<XLEN>::verbose     (std::string_view packet) {};
 
     ////////////////////////////////////////
@@ -241,10 +223,9 @@ namespace rsp {
                 XLEN    addr;
         shadow::pkind_t kind;
 
-        // breakpoint/watchpoint
         switch (XLEN) {
-            case 32: status = sscanf(packet, "z%h,%8h,%h", &type, &addr, &kind);
-            case 64: status = sscanf(packet, "z%h,%16h,%h", &type, &addr, &kind);
+            case 32: status = std::sscanf(packet, "z%x,%8x,%x", &type, &addr, &kind);
+            case 64: status = std::sscanf(packet, "z%x,%16x,%x", &type, &addr, &kind);
         }
 
         shadow.point_remove(type, addr, kind);
@@ -258,10 +239,9 @@ namespace rsp {
                 XLEN    addr;
         shadow::pkind_t kind;
 
-        // breakpoint/watchpoint
         switch (XLEN) {
-            case 32: status = sscanf(packet, "Z%h,%8h,%h", &type, &addr, &kind);
-            case 64: status = sscanf(packet, "Z%h,%16h,%h", &type, &addr, &kind);
+            case 32: status = std::sscanf(packet, "Z%x,%8x,%x", &type, &addr, &kind);
+            case 64: status = std::sscanf(packet, "Z%x,%16x,%x", &type, &addr, &kind);
         }
 
         shadow.point_insert(type, addr, kind);
@@ -272,6 +252,7 @@ namespace rsp {
     // RSP extended/reset/detach/kill
     ////////////////////////////////////////
 
+    template <typename XLEN>
     void Protocol<XLEN>::extended () {
         // set extended mode
         m_state.extended = true;
@@ -279,11 +260,13 @@ namespace rsp {
         tx("OK");
     };
 
+    template <typename XLEN>
     void Protocol<XLEN>::reset       () {
         // perform DUT RESET sequence
         //dut_reset_assert();
     };
 
+    template <typename XLEN>
     void Protocol<XLEN>::detach () {
         // send response (GDB cliend will close the socket connection)
         tx("OK");
@@ -302,6 +285,7 @@ namespace rsp {
         accept();
     };
 
+    template <typename XLEN>
     void Protocol<XLEN>::kill () {
         // TODO: implement DPI call to $finish();
         // TODO: throw exception, catch it in main and return from main
@@ -312,6 +296,7 @@ namespace rsp {
     // RSP packet
     ////////////////////////////////////////
 
+    template <typename XLEN>
     void Protocol<XLEN>::parse (std::string_view packet) {
         switch (packet[0]) {
         //  case "x": mem_bin_read ();
