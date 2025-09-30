@@ -24,14 +24,15 @@ namespace rsp {
 
         Packet m_packet;
 
-        Protocol (std::string_view name);
+        // constructor/destructor
+        Protocol (std::string_view);
+        ~Protocol ();
 
         std::string_view rx ();
         void tx (std::string_view);
 
-        // constructor/destructor
-        Protocol (std::string_view);
-        ~Protocol ();
+        std::span<std::byte> hex2bin (std::string_view) const;
+        std::string bin2hex (std::span<std::byte>) const;
 
         // packet parsers
         void mem_read    (std::string_view);
