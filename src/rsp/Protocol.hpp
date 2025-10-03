@@ -14,7 +14,7 @@
 
 namespace rsp {
 
-    template <typename XLEN>
+    template <typename XLEN, typename SHADOW>
     class Protocol : Packet {
 
         struct State {
@@ -26,8 +26,10 @@ namespace rsp {
 
         State m_state;
 
+        SHADOW m_shadow;
+
         // constructor/destructor
-        Protocol (std::string_view);
+        Protocol (std::string_view, SHADOW);
         ~Protocol ();
 
         std::string_view rx ();
@@ -62,10 +64,11 @@ namespace rsp {
         void parse       (std::string_view);
 
         // dummy placeholders
-        void dut_reset_assert() {};
-        std::span<std::byte> dut_mem_read (XLEN) {};
-        void dut_mem_write (XLEN, std::span<std::byte>) {};
-        XLEN dut_reg_read (int unsigned) {};
-        void dut_reg_write (int unsigned, XLEN) {};
+        // DUT
+        void                 dut_reset_assert() {};
+        std::span<std::byte> dut_mem_read (XLEN) { return {}; };
+        void                 dut_mem_write (XLEN, std::span<std::byte>) {};
+        XLEN                 dut_reg_read (int unsigned) { return 0; };
+        void                 dut_reg_write (int unsigned, XLEN) {};
     };
 };

@@ -59,6 +59,11 @@
         "cinttypes": "cpp",
         "typeinfo": "cpp",
         "iostream": "cpp",
-        "format": "cpp"
+        "format": "cpp",
+        "charconv": "cpp",
+        "ctime": "cpp",
+        "istream": "cpp",
+        "text_encoding": "cpp",
+        "variant": "cpp"
     }
 }

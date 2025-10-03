@@ -16,22 +16,23 @@
 
 namespace rsp {
 
-    template <typename XLEN>
-    Protocol<XLEN>::Protocol (std::string_view name) :
-        Packet(name)
+    template <typename XLEN, typename SHADOW>
+    Protocol<XLEN, SHADOW>::Protocol (std::string_view name, SHADOW shadow) :
+        Packet(name),
+        m_shadow(shadow)
     {
     }
 
-    template <typename XLEN>
-    Protocol<XLEN>::~Protocol () { };
+    template <typename XLEN, typename SHADOW>
+    Protocol<XLEN, SHADOW>::~Protocol () { };
 
-    template <typename XLEN>
-    std::string_view Protocol<XLEN>::rx () {
+    template <typename XLEN, typename SHADOW>
+    std::string_view Protocol<XLEN, SHADOW>::rx () {
         return Packet::rx(m_state.acknowledge);
     }
 
-    template <typename XLEN>
-    void Protocol<XLEN>::tx (std::string_view packet) {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::tx (std::string_view packet) {
         Packet::tx(packet, m_state.acknowledge);
     }
 
@@ -39,8 +40,8 @@ namespace rsp {
     // conversion between std::byte and HEX
     ////////////////////////////////////////
 
-    template <typename XLEN>
-    std::vector<std::byte> Protocol<XLEN>::hex2bin (std::string_view hex) const {
+    template <typename XLEN, typename SHADOW>
+    std::vector<std::byte> Protocol<XLEN, SHADOW>::hex2bin (std::string_view hex) const {
         std::vector<std::byte> bin { hex.size()/2 };
         for (size_t i = 0; i < hex.length(); i += 2) {
             std::string_view str = hex.substr(i, 2);
@@ -50,8 +51,8 @@ namespace rsp {
         return bin;
     }
 
-    template <typename XLEN>
-    std::string Protocol<XLEN>::bin2hex (std::span<std::byte> bin) const {
+    template <typename XLEN, typename SHADOW>
+    std::string Protocol<XLEN, SHADOW>::bin2hex (std::span<std::byte> bin) const {
         return std::format("{::02x}", bin);
     }
 
@@ -59,8 +60,8 @@ namespace rsp {
     // RSP memory access (hexadecimal)
     ////////////////////////////////////////
 
-    template <typename XLEN>
-    void Protocol<XLEN>::mem_read (std::string_view packet) {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::mem_read (std::string_view packet) {
         // memory address and length
         int code;
         XLEN addr;
@@ -77,7 +78,7 @@ namespace rsp {
         if (m_state.dut_memory) {
             data = dut_mem_read(addr, size);
         } else {
-            data = shadow.mem_read(addr, size);
+            data = m_shadow.mem_read(addr, size);
         }
     //    $display("DBG: rsp_mem_read: pkt = %s", pkt);
 
@@ -85,8 +86,8 @@ namespace rsp {
         tx(bin2hex(data));
     };
 
-    template <typename XLEN>
-    void Protocol<XLEN>::mem_write   (std::string_view packet) {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::mem_write   (std::string_view packet) {
         // memory address and length
         int code;
         XLEN adr;
@@ -103,7 +104,7 @@ namespace rsp {
 
         // write memory
 //        dut_mem_write(adr+i,                 dat  ));
-        shadow.mem_write(adr, hex2bin(hex));
+        m_shadow.mem_write(adr, hex2bin(hex));
 
         // send response
         tx("OK");
@@ -113,15 +114,15 @@ namespace rsp {
     // RSP multiple register access
     ////////////////////////////////////////
 
-    template <typename XLEN>
-    void Protocol<XLEN>::reg_readall (std::string_view packet) {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::reg_readall (std::string_view packet) {
         // register value
         std::span<XLEN> val;
         // read DUT/shadow
         if (m_state.dut_register) {
             val = dut_reg_read();
         } else {
-            val = shadow.reg_read();
+            val = m_shadow.reg_read();
         }
 
         // send response
@@ -129,14 +130,14 @@ namespace rsp {
         tx(response);
     };
 
-    template <typename XLEN>
-    void Protocol<XLEN>::reg_writeall(std::string_view packet) {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::reg_writeall(std::string_view packet) {
         // register value
-        std::span<XLEN> val { static_cast<XLEN> hex2bin(packet.substr(1, packet.size()-1)) };
+        std::span<XLEN> val { static_cast<XLEN>(hex2bin(packet.substr(1, packet.size()-1))) };
 
         // write DUT/shadow
         dut_reg_writeall(val);
-        shadow.reg_writeall(val);
+        m_shadow.reg_writeall(val);
 
         // send response
         tx("OK");
@@ -146,18 +147,18 @@ namespace rsp {
     // RSP single register access
     ////////////////////////////////////////
 
-    template <typename XLEN>
-    void Protocol<XLEN>::reg_readone (std::string_view packet) {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::reg_readone (std::string_view packet) {
         // register index
         int unsigned idx;
         int status = std::sscanf(packet.data(), "p%x", &idx);
 
         // read DUT/shadow
         XLEN val;
-        if (m_state.register) {
-            val = dut_reg_readone(idx);
+        if (m_state.dut_register) {
+            val = dut_reg_read(idx);
         } else {
-            val = shadow.reg_readone(idx);
+            val = m_shadow.reg_readone(idx);
         }
 
         // send response
@@ -165,22 +166,22 @@ namespace rsp {
         tx(response);
     };
 
-    template <typename XLEN>
-    void Protocol<XLEN>::reg_writeone(std::string_view packet) {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::reg_writeone(std::string_view packet) {
         // register index
         int unsigned idx;
         int status = std::sscanf(packet.data(), "P%x=", &idx);
 
         // register value
-        XLEN val = static_cast<XLEN> hex2bin(packet.substr(packet.size()-sizeof(XLEN), sizeof(XLEN)));
+        XLEN val = static_cast<XLEN>(hex2bin(packet.substr(packet.size()-sizeof(XLEN), sizeof(XLEN))));
 
         // write DUT/shadow
         dut_reg_writeone(idx, val);
-        shadow.reg_writeone(idx, val);
+        m_shadow.reg_writeone(idx, val);
         // debug
-        switch (XLEN) {
-            case 32: cout << std::format("DEBUG: GPR[{0d}] <= 32'h{08x}", idx, val);
-            case 64: cout << std::format("DEBUG: GPR[{0d}] <= 64'h{016x}", idx, val);
+        switch (sizeof(XLEN)*8) {
+            case 32: std::cout << std::format("DEBUG: GPR[{0d}] <= 32'h{08x}", idx, val);
+            case 64: std::cout << std::format("DEBUG: GPR[{0d}] <= 64'h{016x}", idx, val);
         }
 
         // send response
@@ -191,76 +192,76 @@ namespace rsp {
     // RSP forward/reverse step/continue
     ///////////////////////////////////////
 
-    template <typename XLEN>
-    void Protocol<XLEN>::run_step    (std::string_view packet) {};
-    template <typename XLEN>
-    void Protocol<XLEN>::run_continue(std::string_view packet) {};
-    template <typename XLEN>
-    void Protocol<XLEN>::run_backward(std::string_view packet) {};
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::run_step    (std::string_view packet) {};
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::run_continue(std::string_view packet) {};
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::run_backward(std::string_view packet) {};
 
-    template <typename XLEN>
-    void Protocol<XLEN>::signal      (std::string_view packet) {};
-    template <typename XLEN>
-    void Protocol<XLEN>::query       (std::string_view packet) {};
-    template <typename XLEN>
-    void Protocol<XLEN>::verbose     (std::string_view packet) {};
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::signal      (std::string_view packet) {};
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::query       (std::string_view packet) {};
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::verbose     (std::string_view packet) {};
 
     ////////////////////////////////////////
     // RSP breakpoints/watchpoints
     ////////////////////////////////////////
 
-    template <typename XLEN>
-    void Protocol<XLEN>::point_remove(std::string_view packet) {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::point_remove(std::string_view packet) {
         int status;
-        shadow::ptype_t type;
-                XLEN    addr;
-        shadow::pkind_t kind;
+        typename SHADOW::ptype_t type;
+                 XLEN            addr;
+        typename SHADOW::pkind_t kind;
 
         switch (sizeof(XLEN)*8) {
             case 32: status = std::sscanf(packet.data(), "z%x,%8x,%x", &type, &addr, &kind);
             case 64: status = std::sscanf(packet.data(), "z%x,%16x,%x", &type, &addr, &kind);
         }
 
-        shadow.point_remove(type, addr, kind);
+        m_shadow.point_remove(type, addr, kind);
         tx("OK");
     };
 
-    template <typename XLEN>
-    void Protocol<XLEN>::point_insert(std::string_view packet) {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::point_insert(std::string_view packet) {
         int status;
-        shadow::ptype_t type;
-                XLEN    addr;
-        shadow::pkind_t kind;
+        typename SHADOW::ptype_t type;
+                 XLEN            addr;
+        typename SHADOW::pkind_t kind;
 
         switch (sizeof(XLEN)*8) {
             case 32: status = std::sscanf(packet.data(), "Z%x,%8x,%x", &type, &addr, &kind);
             case 64: status = std::sscanf(packet.data(), "Z%x,%16x,%x", &type, &addr, &kind);
         }
 
-        shadow.point_insert(type, addr, kind);
-        tx.("OK");
+        m_shadow.point_insert(type, addr, kind);
+        tx("OK");
     };
 
     ////////////////////////////////////////
     // RSP extended/reset/detach/kill
     ////////////////////////////////////////
 
-    template <typename XLEN>
-    void Protocol<XLEN>::extended () {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::extended () {
         // set extended mode
         m_state.extended = true;
         // send response
         tx("OK");
     };
 
-    template <typename XLEN>
-    void Protocol<XLEN>::reset       () {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::reset       () {
         // perform DUT RESET sequence
         //dut_reset_assert();
     };
 
-    template <typename XLEN>
-    void Protocol<XLEN>::detach () {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::detach () {
         // send response (GDB cliend will close the socket connection)
         tx("OK");
 
@@ -268,7 +269,7 @@ namespace rsp {
         //m_state = STUB_STATE_INIT;
 
         // stop HDL simulation, so the HDL simulator can render waveforms
-        //cout << std::format("GDB: detached, stopping HDL simulation from within state {}.", shadow.sig.name);
+        //cout << std::format("GDB: detached, stopping HDL simulation from within state {}.", m_shadow.sig.name);
         // TODO: implement DPI call to $finish();
         //$stop();
 
@@ -278,8 +279,8 @@ namespace rsp {
         accept();
     };
 
-    template <typename XLEN>
-    void Protocol<XLEN>::kill () {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::kill () {
         // TODO: implement DPI call to $finish();
         // TODO: throw exception, catch it in main and return from main
         std::exit(0);
@@ -289,8 +290,8 @@ namespace rsp {
     // RSP packet
     ////////////////////////////////////////
 
-    template <typename XLEN>
-    void Protocol<XLEN>::parse (std::string_view packet) {
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::parse (std::string_view packet) {
         switch (packet[0]) {
         //  case "x": mem_bin_read ();
         //  case "X": mem_bin_write();
