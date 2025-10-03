@@ -56,6 +56,336 @@ namespace rsp {
         return std::format("{::02x}", bin);
     }
 
+    ///////////////////////////////////////
+    // RSP signal
+    ///////////////////////////////////////
+
+//    // in response to '?'
+//    function automatic int rsp_signal();
+//        string pkt;
+//        int status;
+//
+//        // read packet
+//        status = rsp_get_packet(pkt);
+//
+//        // reply with current signal
+//        status = rsp_stop_reply();
+//        return(status);
+//    endfunction: rsp_signal
+//
+//    // TODO: Send a exception packet "T <value>"
+//    function automatic int rsp_stop_reply (
+//        // register
+//        input int unsigned idx = -1,
+//        input [XLEN-1:0]   val = 'x,
+//        // thread
+//        input int thr = -1,
+//        // core
+//        input int unsigned core = -1
+//    );
+//        string str;
+//        // reply with signal/register/thread/core/reason
+//        str = $sformatf("T%02h;", shd.sig);
+//        // register
+//        if (idx != -1) {
+//            case (XLEN)
+//                32: str = {str, $sformatf("%0h:%08h;", idx, val)};
+//                64: str = {str, $sformatf("%0h:%016h;", idx, val)};
+//            endcase
+//        end
+//        // thread
+//        if (thr != -1) {
+//            str = {str, $sformatf("thread:%s;", sformat_thread(1, thr))};
+//        end
+//        // core
+//        if (core != -1) {
+//            str = {str, $sformatf("core:%h;", core)};
+//        end
+//        // reason
+//        case (shd.rsn.ptype)
+//            watch, rwatch, awatch: {
+//                str = {str, $sformatf("%s:%h;", shd.rsn.ptype.name, shd.ret.lsu.adr)};
+//            end
+//            swbreak, hwbreak: {
+//                str = {str, $sformatf("%s:;", shd.rsn.ptype.name)};
+//            end
+//            replaylog: {
+//                str = {str, $sformatf("%s:%s;", shd.rsn.ptype.name, shd.cnt == 0 ? "begin" : "end")};
+//            end
+//        endcase
+//        // remove the trailing semicolon
+//        str = str.substr(0, str.len()-2);
+//        return(rsp_send_packet(str));
+//    //    // reply with signal (current signal by default)
+//    //    return(rsp_send_packet($sformatf("S%02h", sig)));
+//    endfunction: rsp_stop_reply
+//
+//    // send ERROR number reply (GDB only)
+//    // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
+//    function automatic int rsp_error_number_reply (
+//        input byte val = 0
+//    );
+//        return(rsp_send_packet($sformatf("E%02h", val)));
+//    endfunction: rsp_error_number_reply
+//
+//    // send ERROR text reply (GDB only)
+//    // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
+//    function automatic int rsp_error_text_reply (
+//        input string str = ""
+//    );
+//        return(rsp_send_packet($sformatf("E.%s", rsp_ascii2hex(str))));
+//    endfunction: rsp_error_text_reply
+//
+//    // send ERROR LLDB reply
+//    // https://lldb.llvm.org/resources/lldbgdbremote.html#qenableerrorstrings
+//    function automatic int rsp_error_lldb_reply (
+//        input byte   val = 0,
+//        input string str = ""
+//    );
+//        return(rsp_send_packet($sformatf("E%02h;%s", val, rsp_ascii2hex(str))));
+//    endfunction: rsp_error_lldb_reply
+//
+//    // send message to GDB console output
+//    function automatic int rsp_console_output (
+//        input string str
+//    );
+//        return(rsp_send_packet($sformatf("O%s", rsp_ascii2hex(str))));
+//    endfunction: rsp_console_output
+
+    ///////////////////////////////////////
+    // RSP query (monitor, )
+    ///////////////////////////////////////
+
+    // send message to GDB console output
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::monitor_reply (std::string_view str) {}
+        tx(bin2hex(str))));
+    }
+
+    // GDB monitor commands
+    // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Server.html
+    // https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html#General-Query-Packets
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::query_monitor (std::string_view str) {
+        switch (str)
+            case "help":
+                monitor_reply("HELP: Available monitor commands:\n"
+                              "* 'set remote log on/off',\n"
+                              "* 'set waveform dump on/off',\n"
+                              "* 'set register=dut/shadow' (reading registers from dut/shadow, default is shadow),\n"
+                              "* 'set memory=dut/shadow' (reading memories from dut/shadow, default is shadow),\n"
+                              "* 'reset assert' (assert reset for a few clock periods),\n"
+                              "* 'reset release' (synchronously release reset).");
+            case "set remote log on":
+                m_state.remote_log = 1'b1;
+                monitor_reply("Enabled remote logging to STDOUT.\n");
+            case "set remote log off":
+                m_state.remote_log = 1'b0;
+                monitor_reply("Disabled remote logging.\n");
+            case "set waveform dump on":
+//                $dumpon;
+                monitor_reply("Enabled waveform dumping.\n");
+            case "set waveform dump off":
+//                $dumpoff;
+                monitor_reply("Disabled waveform dumping.\n");
+            case "set register=dut":
+                m_state.dut_register = true;
+                monitor_reply("Reading registers directly from DUT.\n");
+            case "set register=shadow":
+                m_state.dut_register = false;
+                monitor_reply("Reading registers from shadow copy.\n");
+            case "set memory=dut":
+                m_state.dut_memory = true;
+                monitor_reply("Reading memory directly from DUT.\n");
+            case "set memory=shadow":
+                m_state.dut_memory = false;
+                monitor_reply("Reading memory from shadow copy.\n");
+            case "reset assert":
+//                dut_reset_assert;
+                // TODO: rethink whether to reset the shadow or keep it
+                //shd = new();
+                monitor_reply("DUT reset asserted.\n");
+            case "reset release":
+//                dut_reset_release;
+                monitor_reply("DUT reset released.\n");
+            default:
+                monitor_reply("'monitor' command was not recognized.\n");
+        }
+    }
+
+        // GDB supported features
+        // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Server.html
+        // https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html#General-Query-Packets
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::query_supported (std::string_view str) {
+        int code;
+        int status;
+        string_queue_t features;
+        string feature;
+        string value;
+
+        // parse features supported by the GDB client
+        features = split(str, byte'(";"));
+        foreach (features[i]) {
+            int unsigned len = features[i].len();
+            // add feature and its value (+/-/?)
+            value = string'(features[i][len-1]);
+            if (value inside {"+", "-", "?"}) {
+                feature = features[i].substr(0, len-2);
+            } else {
+                features[i] = char2space(features[i], byte'("="));
+                code = $sscanf(str, "%s %s", feature, value);
+            }
+            features_gdb[feature] = value;
+        }
+        $display("DEBUG: features_gdb = %p", features_gdb);
+
+        // reply with stub features
+        str = "";
+        foreach (features_stub[feature]) {
+            if (features_stub[feature] inside {"+", "-", "?"}) {
+                str = {str, $sformatf("%s%s;", feature, features_stub[feature])};
+            } else {
+                str = {str, $sformatf("%s=%s;", feature, features_stub[feature])};
+            }
+        }
+        // remove the trailing semicolon
+        str = str.substr(0, str.len()-2);
+        status = rsp_send_packet(str);
+
+        return(0);
+    }
+
+
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::format_thread (
+        input int process,
+        input int thread
+    ) {
+        switch (features_stub["multiprocess"]) {
+            case "+": return($sformatf("p%h,%h", process, thread));
+            case "-": return($sformatf("%0h", thread));
+        }
+    }
+
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::parse_thread (
+        input string str
+    ) {
+        int code;
+        int process;
+        int thread;
+        switch (features_stub["multiprocess"]) {
+            case "+": code = $sscanf(str, "p%h,%h;", process, thread);
+            case "-": code = $sscanf(str, "%h", thread);
+        }
+        return(thread);
+    }
+
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::query (std::string_view packet);
+        string str;
+        int status;
+
+        // parse various query packets
+        if (std::sscanf(packet, "qSupported:%s", str) > 0) {
+            $display("DEBUG: qSupported = %p", str);
+            status = rsp_query_supported(str);
+        } else
+        // parse various monitor packets
+        if (std::sscanf(packet, "qRcmd,%s", str) > 0) {
+            rsp_query_monitor(rsp_hex2ascii(str));
+        } else
+        // start no acknowledge mode
+        if (packet == "QStartNoAckMode") {
+            status = rsp_send_packet("OK");
+            m_state.acknowledge = false;
+        } else
+        // start no acknowledge mode
+        if (packet == "QEnableErrorStrings") {
+            status = rsp_send_packet("OK");
+            // TODO
+//            m_state.acknowledge = false;
+        } else
+        // query first thread info
+        if (packet == "qfThreadInfo") {
+            str = "m";
+            foreach (THREADS[thr]) {
+                str = {str, sformat_thread(1, thr+1), ","};
+            end
+            // remove the trailing comma
+            str = str.substr(0, str.len()-2);
+            status = rsp_send_packet(str);
+        } else
+        // query subsequent thread info
+        if (packet == "qsThreadInfo") {
+            // last thread
+            status = rsp_send_packet("l");
+        } else
+        // query extra info for given thread
+        if (std::sscanf(packet, "qThreadExtraInfo,%s", str) > 0) {
+            int thr;
+            thr = sscan_thread(str);
+            $display("DEBUG: qThreadExtraInfo: str = %p, thread = %0d, THREADS[%0d-1] = %s", str, thr, thr, THREADS[thr-1]);
+            status = rsp_send_packet(rsp_ascii2hex(THREADS[thr-1]));
+        } else
+        // query first thread info
+        if (packet == "qC") {
+            int thr = 1;
+            str = {"QC", sformat_thread(1, thr)};
+            status = rsp_send_packet(str);
+        } else
+        // query whether the remote server attached to an existing process or created a new process
+        if (packet == "qAttached") {
+            // respond as "attached"
+            status = rsp_send_packet("1");
+        } else
+        // not supported, send empty response packet
+        {
+            status = rsp_send_packet("");
+        }
+    }
+
+    ////////////////////////////////////////
+    // RSP verbose
+    ////////////////////////////////////////
+
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::verbose (std::string_view packet) {
+        str::string str;
+        string tmp;
+        int code;
+
+        // interrupt signal
+        if (packet == "vCtrlC") {
+//            shd.sig = SIGINT;
+//            tx("OK");
+            tx("");
+        } else
+        // list actions supported by the ‘vCont?’ packet
+        if (packet == "vCont?") {
+            tx("vCont;c:C;s:S");
+        }
+        // parse 'vCont' packet
+        if (std::sscanf(packet.data(), "vCont;%s", str) > 0) {
+            string_queue_t features;
+            string action;
+            string thread;
+            // parse action list
+            features = split(str, byte'(";"));
+            foreach (features[i]) {
+                // parse action/thread pair
+                features[i] = char2space(features[i], byte'(":"));
+                code = $sscanf(features[i], "%s %s", action, thread);
+                // TODO
+            }
+        } else
+        // not supported, send empty response packet
+        {
+            tx("");
+        }
+    }
+
     ////////////////////////////////////////
     // RSP memory access (hexadecimal)
     ////////////////////////////////////////

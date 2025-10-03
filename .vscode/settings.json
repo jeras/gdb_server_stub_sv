@@ -64,6 +64,7 @@
         "ctime": "cpp",
         "istream": "cpp",
         "text_encoding": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "sstream": "cpp"
     }
 }
