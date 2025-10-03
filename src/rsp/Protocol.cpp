@@ -211,35 +211,25 @@ namespace rsp {
     ////////////////////////////////////////
 
     template <typename XLEN, typename SHADOW>
-    void Protocol<XLEN, SHADOW>::point_remove(std::string_view packet) {
+    void Protocol<XLEN, SHADOW>::point(std::string_view packet) {
         int status;
         typename SHADOW::ptype_t type;
                  XLEN            addr;
         typename SHADOW::pkind_t kind;
 
         switch (sizeof(XLEN)*8) {
-            case 32: status = std::sscanf(packet.data(), "z%x,%8x,%x", &type, &addr, &kind);
-            case 64: status = std::sscanf(packet.data(), "z%x,%16x,%x", &type, &addr, &kind);
+            case 32: status = std::sscanf(packet.data(), "[zZ]%x,%8x,%x", &command, &type, &addr, &kind);
+            case 64: status = std::sscanf(packet.data(), "[zZ]%x,%16x,%x", &command, &type, &addr, &kind);
         }
 
-        m_shadow.point_remove(type, addr, kind);
-        tx("OK");
-    };
-
-    template <typename XLEN, typename SHADOW>
-    void Protocol<XLEN, SHADOW>::point_insert(std::string_view packet) {
-        int status;
-        typename SHADOW::ptype_t type;
-                 XLEN            addr;
-        typename SHADOW::pkind_t kind;
-
-        switch (sizeof(XLEN)*8) {
-            case 32: status = std::sscanf(packet.data(), "Z%x,%8x,%x", &type, &addr, &kind);
-            case 64: status = std::sscanf(packet.data(), "Z%x,%16x,%x", &type, &addr, &kind);
+        // insert/remove
+        switch (command) {
+            case 'z': shadow.point_remove(type, addr, kind);
+            case 'Z': shadow.point_insert(type, addr, kind);
         }
 
-        m_shadow.point_insert(type, addr, kind);
-        tx("OK");
+        // send  response
+        tx.("OK");
     };
 
     ////////////////////////////////////////
@@ -310,8 +300,8 @@ namespace rsp {
             case 'Q':
             case 'q': query       (packet);
             case 'v': verbose     (packet);
-            case 'z': point_remove(packet);
-            case 'Z': point_insert(packet);
+            case 'z':
+            case 'Z': point       (packet);
             case '!': extended    ();
             case 'R': reset       ();
             case 'D': detach      ();
