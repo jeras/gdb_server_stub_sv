@@ -9,7 +9,7 @@
 // C++ includes
 #include <map>
 
-namespace HdlDb {
+namespace shadow {
 
     // point type
     enum class PointType : int {

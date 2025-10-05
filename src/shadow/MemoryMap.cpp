@@ -10,44 +10,38 @@
 #include "AddressMap.hpp"
 #include "MemoryMap.hpp"
 
-namespace HdlDb {
+namespace shadow {
 
     // read from shadow memory map
-    template <typename XLEN>
-    std::vector<std::byte> MemoryMap<XLEN>::read (
+    template <typename XLEN, AddressMap AMAP>
+    std::span<std::byte> MemoryMap<XLEN, AMAP>::read (
         const XLEN        addr,
         const std::size_t size
     ) const {
-        std::vector<std::byte> tmp;
         // reading from an address map block
-        for (int unsigned blk=0; blk<MMAP.size(); blk++) {
-            if ((addr >= MMAP[blk].base) &&
-                (addr <  MMAP[blk].base + MMAP[blk].size)) {
-//                tmp = {>>{mem[blk] with [adr - MMAP[blk].base +: siz]}};
-                return tmp;
+        for (int unsigned blk=0; blk<AMAP.mem.size(); blk++) {
+            if ((addr >= AMAP.mem[blk].base) &&
+                (addr <  AMAP.mem[blk].base + AMAP.mem[blk].size)) {
+                return { m_mem.data() + (adr - AMAP.mem[blk].base), size };
             };
         };
         // reading from an unmapped IO region (reads have higher priority)
         // TODO: handle access to nonexistent entries with a warning?
         // TODO: handle access with a size mismatch
-        tmp = m_i_o[adr];
-        return tmp;
+        return m_i_o[adr];
     };
 
     // write to shadow memory map
-    template <typename XLEN>
-    void MemoryMap<XLEN>::write (
-        const XLEN                   addr,
-        const std::vector<std::byte> data
+    template <typename XLEN, AddressMap AMAP>
+    void MemoryMap<XLEN, AMAP>::write (
+        const XLEN                 addr,
+        const std::span<std::byte> data
     ) {
         // writing to an address map block
-        for (int unsigned blk=0; blk<MMAP.size; blk++) {
-            if ((addr >= MMAP[blk].base) &&
-                (addr <  MMAP[blk].base + MMAP[blk].size)) {
-//                {>>{mem[blk] with [adr - MMAP[blk].base +: dat.size()]}} = dat;
-    //            for (int unsigned i=0; i<dat.size(); i++) begin: byt
-    //              mem[blk][adr - MMAP[blk].base] = dat[i];
-    //            end: byt
+        for (int unsigned blk=0; blk<AMAP.size; blk++) {
+            if ((addr >= AMAP.mem[blk].base) &&
+                (addr <  AMAP.mem[blk].base + AMAP.mem[blk].size)) {
+                std::copy(m_mem.data() + (adr - AMAP.mem[blk].base), m_mem.data() + (adr - AMAP.mem[blk].base + size), data.data());
                 return;
             };
         };

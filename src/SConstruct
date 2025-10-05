@@ -1,0 +1,14 @@
+DefaultEnvironment(CXX = 'g++-14', CPPPATH = ['.', 'rsp', 'shadow'])
+
+Program('hdldb', [
+        'hdldb.cpp',
+        'rsp/Socket.cpp',
+        'rsp/Packet.cpp',
+        'rsp/Protocol.cpp',
+        'shadow/Register.cpp',
+        'shadow/MemoryMap.cpp',
+        'shadow/Point.cpp',
+        'shadow/Shadow.cpp'
+    ],
+    CXXFLAGS = '-Wall -g -std=c++23'
+)

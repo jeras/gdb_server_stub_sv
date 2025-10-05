@@ -6,7 +6,7 @@
 // Licensed under CERN-OHL-P v2 or later
 ///////////////////////////////////////////////////////////////////////////////
 
-namespace HdlDb {
+namespace shadow {
 
     //
     enum class RegisterEnum : int {GPR, PC, FPR, VEC, CSR};

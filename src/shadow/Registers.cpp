@@ -9,7 +9,7 @@
 // HDLDB includes
 #include "Registers.hpp"
 
-namespace HdlDb {
+namespace shadow {
 
     template <typename XLEN, typename FLEN, typename VLEN, bool extE, bool extF, bool extV>
     XLEN RegistersRiscV<XLEN, FLEN, VLEN, extE, extF, extV>::write (

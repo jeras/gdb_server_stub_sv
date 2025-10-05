@@ -8,7 +8,7 @@
 
 #include <array>
 
-namespace HdlDb {
+namespace shadow {
 
     template <typename XLEN>
     struct AddressBlock {
@@ -16,10 +16,13 @@ namespace HdlDb {
         XLEN size;
     };
 
-    // cumulative memory block array size
     template <typename XLEN, std::size_t NUM>
-    constexpr XLEN addressBlockSize(
-        const std::array<AddressBlock<XLEN>, NUM> blocks
+    using AddressBlockArray = std::array<AddressBlock<XLEN>, NUM>;
+
+    // cumulative address block array size
+    template <typename XLEN, std::size_t NUM>
+    constexpr XLEN addressBlockSize (
+        const AddressBlockArray<XLEN, NUM> blocks
     ) {
         XLEN size = 0;
         for (const auto& block : blocks) {
@@ -28,18 +31,25 @@ namespace HdlDb {
         return size;
     };
 
-    // memory block array alignment check
+    // address block array alignment check
     template <typename XLEN, std::size_t NUM>
-    constexpr bool addressBlockAlignment(
-        const std::array<AddressBlock<XLEN>, NUM> blocks
+    constexpr bool addressBlockAlignment (
+        const AddressBlockArray<XLEN, NUM> blocks
     ) {
-        for (const auto& block : mem) {
+        for (const auto& block : blocks) {
             // check base alignment
             if (block.base % sizeof(XLEN))  return false;
             // check size alignment
             if (block.size % sizeof(XLEN))  return false;
         };
         return true;
+    };
+
+    // address map
+    template <typename XLEN, std::size_t MNUM, std::size_t PNUM>
+    struct AddressMap {
+        AddressBlockArray<XLEN, MNUM> mem;  // memories
+        AddressBlockArray<XLEN, PNUM> i_o;  // I/O peripherals
     };
 
 };

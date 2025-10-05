@@ -8,7 +8,7 @@
 
 #include "Shadow.hpp"
 
-namespace hdldb {
+namespace shadow {
 
     // constructor
     template <typename XLEN, typename FLEN, unsigned int CNUM>

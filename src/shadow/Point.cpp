@@ -12,7 +12,7 @@
 // C++ includes
 #include <map>
 
-namespace HdlDb {
+namespace shadow {
 
     // RSP insert breakpoint/watchpoint into dictionary
     template <typename XLEN>

@@ -1,25 +1,22 @@
 ///////////////////////////////////////////////////////////////////////////////
-// HDLDB main (stand alone executable)
+// HDLDB configuration
 //
 // Copyright 2025 Iztok Jeras <iztok.jeras@gmail.com>
 //
 // Licensed under CERN-OHL-P v2 or later
 ///////////////////////////////////////////////////////////////////////////////
 
+// C includes
+#include <cstdint>
+
 // C++ includes
-#include <print>
+#include <string>
 
 // HDLDB includes
-#include <hdldb.hpp>
+#include "Shadow.hpp"
+#include "Protocol.hpp"
 
-int main() {
-    std::println("Hello, World!");
+using XlenHdlDb = std::uint32_t;
+using FlenHdlDb = std::uint32_t;
 
-    Shadow<XlenHdlDb, FlenHdlDb, 1> shadow;
-
-    Protocol<XlenHdlDb, ShadowHdlDb> protocol { "1234", shadow };
-
-    protocol.loop();
-
-    return 0;
-}
+using ShadowHdlDb = Shadow<>;

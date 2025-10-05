@@ -24,10 +24,9 @@
 #include "Registers.hpp"
 #include "Instruction.hpp"
 #include "Point.hpp"
-#include "AddressMap.hpp"
 #include "MemoryMap.hpp"
 
-namespace hdldb {
+namespace shadow {
 
     template <typename XLEN, typename FLEN, unsigned int CNUM>
     class Shadow {
