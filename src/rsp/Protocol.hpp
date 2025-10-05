@@ -8,6 +8,7 @@
 
 // C++ includes
 #include <string>
+#include <map>
 
 // HDLDB includes
 #include "Packet.hpp"
@@ -17,14 +18,29 @@ namespace rsp {
     template <typename XLEN, typename SHADOW>
     class Protocol : Packet {
 
+        // server state
         struct State {
             bool acknowledge;
             bool extended;
             bool dut_register;
             bool dut_memory;
+            bool remote_log;
         };
 
         State m_state;
+
+        // supported features
+        std::map<std::string, char> m_features_server {
+            {"swbreak"        , "+"},
+            {"hwbreak"        , "+"},
+            {"error-message"  , "+"},  // GDB (LLDB asks with QEnableErrorStrings)
+            {"binary-upload"  , "-"},  // TODO: for now it is broken
+            {"multiprocess"   , "-"},
+            {"ReverseStep"    , "+"},
+            {"ReverseContinue", "+"},
+            {"QStartNoAckMode", "+"}
+        };
+        std::map<std::string, char> m_features_client { };
 
         SHADOW m_shadow;
 
@@ -45,8 +61,7 @@ namespace rsp {
         void reg_writeall(std::string_view);
         void reg_readone (std::string_view);
         void reg_writeone(std::string_view);
-        void point_remove(std::string_view);
-        void point_insert(std::string_view);
+        void point       (std::string_view);
 
         void run_step    (std::string_view);
         void run_continue(std::string_view);
@@ -62,6 +77,14 @@ namespace rsp {
 
         // packet parser
         void parse       (std::string_view);
+
+        // helpers
+        void query_supported     (std::string_view);
+        void query_monitor       (std::string_view);
+        void query_monitor_reply (std::string_view);
+
+        std::string format_thread (int, int);
+        int parse_thread  (std::string_view);
 
         // dummy placeholders
         // DUT
