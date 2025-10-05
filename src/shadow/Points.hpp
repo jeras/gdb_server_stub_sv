@@ -9,6 +9,9 @@
 // C++ includes
 #include <map>
 
+// HDLDB includes
+#include "Instruction.hpp"
+
 namespace shadow {
 
     // point type
@@ -29,16 +32,14 @@ namespace shadow {
         PointKind kind;
     };
 
-    template <typename XLEN>
+    template <typename XLEN, typename FLEN>
     class Points {
-        std::map<XLEN, Point> m_breakpoints;
-        std::map<XLEN, Point> m_watchpoints;
+        std::map<XLEN, Point> m_break;
+        std::map<XLEN, Point> m_watch;
 
-        // DUT access
-
-        // RSP access
         int insert (const PointType, const XLEN , const PointKind);
-        int remove (const PointType, const XLEN , const PointKind) const;
+        int remove (const PointType, const XLEN , const PointKind);
+        bool match (Retired<XLEN> ret);
     };
 
 };

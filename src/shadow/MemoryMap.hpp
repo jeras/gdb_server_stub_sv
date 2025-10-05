@@ -28,8 +28,8 @@ namespace shadow {
         std::map<XLEN, std::byte> m_i_o;
 
         // constructor/destructor
-        MemoryMap ();
-        ~MemoryMap ();
+        MemoryMap () = default;
+        ~MemoryMap () = default;
 
         // memory read/write
         std::span<std::byte> read  (const XLEN, const std::size_t) const;

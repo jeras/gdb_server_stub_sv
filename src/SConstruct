@@ -7,8 +7,8 @@ Program('hdldb', [
         'rsp/Protocol.cpp',
         'shadow/Register.cpp',
         'shadow/MemoryMap.cpp',
-        'shadow/Point.cpp',
-        'shadow/Shadow.cpp'
+        'shadow/Points.cpp',
+        'shadow/System.cpp'
     ],
     CXXFLAGS = '-Wall -g -std=c++23'
 )

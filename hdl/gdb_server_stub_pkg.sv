@@ -963,7 +963,8 @@ package gdb_server_stub_pkg;
     // RSP breakpoints/watchpoints
     ////////////////////////////////////////
 
-        function automatic int rsp_point_remove ();
+        function automatic int rsp_point ();
+            byte command;
             int status;
             string pkt;
             ptype_t ptype;
@@ -975,33 +976,17 @@ package gdb_server_stub_pkg;
 
             // breakpoint/watchpoint
             case (XLEN)
-                32: status = $sscanf(pkt, "z%h,%8h,%h", ptype, addr, pkind);
-                64: status = $sscanf(pkt, "z%h,%16h,%h", ptype, addr, pkind);
+                32: status = $sscanf(pkt, "%c%h,%8h,%h", command, ptype, addr, pkind);
+                64: status = $sscanf(pkt, "%c%h,%16h,%h", command, ptype, addr, pkind);
             endcase
 
-            void'(shd.point_remove(ptype, addr, pkind));
-            return(1);
-        endfunction: rsp_point_remove
-
-        function automatic int rsp_point_insert ();
-            int status;
-            string pkt;
-            ptype_t ptype;
-            SIZE_T  addr;
-            pkind_t pkind;
-
-            // read packet
-            status = rsp_get_packet(pkt);
-
-            // breakpoint/watchpoint
-            case (XLEN)
-                32: status = $sscanf(pkt, "Z%h,%8h,%h", ptype, addr, pkind);
-                64: status = $sscanf(pkt, "Z%h,%16h,%h", ptype, addr, pkind);
+            case (command)
+                "z": void'(shd.point_remove(ptype, addr, pkind));
+                "Z": void'(shd.point_insert(ptype, addr, pkind));
             endcase
 
-            void'(shd.point_insert(ptype, addr, pkind));
             return(1);
-        endfunction: rsp_point_insert
+        endfunction: rsp_point
 
     ///////////////////////////////////////
     // RSP step/continue
@@ -1286,8 +1271,8 @@ package gdb_server_stub_pkg;
                     "q":          rsp_query_packet();
             //        "q": status = rsp_query_packet();
                     "v":          rsp_verbose_packet();
-                    "z": status = rsp_point_remove();
-                    "Z": status = rsp_point_insert();
+                    "z",
+                    "Z": status = rsp_point();
                     "!": status = rsp_extended();
                     "R":          rsp_reset();
                     "D": status = rsp_detach();
