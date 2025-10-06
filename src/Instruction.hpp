@@ -36,6 +36,14 @@ struct RetiredFpr {
     FLEN      wdt;     // write data (next    destination register value)
 };
 
+// VEC (Vector registers)
+template <typename VLEN>
+struct RetiredVec {
+    uint8_t   idx;     // FPR index
+    VLEN      rdt;     // read  data (current destination register value)
+    VLEN      wdt;     // write data (next    destination register value)
+};
+
 // CSR (control status registers)
 template <typename XLEN>
 struct RetiredCsr {
@@ -54,11 +62,12 @@ struct RetiredLsu {
 };
 
 // instruction retirement history log entry
-template <typename XLEN, typename FLEN>
+template <typename XLEN, typename FLEN, typename VLEN>
 struct Retired {
     RetiredIfu<XLEN> ifu;
     RetiredGpr<XLEN> gpr [];
     RetiredFpr<FLEN> fpr [];
+    RetiredVec<VLEN> vec [];
     RetiredCsr<XLEN> csr [];
     RetiredLsu<XLEN> lsu;
 };

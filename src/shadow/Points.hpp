@@ -32,14 +32,14 @@ namespace shadow {
         PointKind kind;
     };
 
-    template <typename XLEN, typename FLEN>
+    template <typename XLEN, typename FLEN, typename VLEN>
     class Points {
         std::map<XLEN, Point> m_break;
         std::map<XLEN, Point> m_watch;
 
         int insert (const PointType, const XLEN , const PointKind);
         int remove (const PointType, const XLEN , const PointKind);
-        bool match (Retired<XLEN> ret);
+        bool match (Retired<XLEN, FLEN, VLEN> ret);
     };
 
 };

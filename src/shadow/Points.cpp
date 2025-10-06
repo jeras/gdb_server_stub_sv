@@ -15,8 +15,8 @@
 namespace shadow {
 
     // RSP insert breakpoint/watchpoint into dictionary
-    template <typename XLEN, typename FLEN>
-    int Points<XLEN, FLEN>::insert (
+    template <typename XLEN, typename FLEN, typename VLEN>
+    int Points<XLEN, FLEN, VLEN>::insert (
         const PointType type,
         const XLEN      addr,
         const PointKind kind
@@ -35,8 +35,8 @@ namespace shadow {
     };
 
     // RSP remove breakpoint/watchpoint from dictionary
-    template <typename XLEN, typename FLEN>
-    int Points<XLEN, FLEN>::remove (
+    template <typename XLEN, typename FLEN, typename VLEN>
+    int Points<XLEN, FLEN, VLEN>::remove (
         const PointType type,
         const XLEN      addr,
         const PointKind kind
@@ -55,8 +55,8 @@ namespace shadow {
     };
 
     // match breakpoint/watchpoint
-    template <typename XLEN, typename FLEN>
-    int Points<XLEN, FLEN>::match (Retired<XLEN, FLEN> ret) {
+    template <typename XLEN, typename FLEN, typename VLEN>
+    int Points<XLEN, FLEN, VLEN>::match (Retired<XLEN, FLEN> ret) {
         // TODO: this is RISC-V specific, should be moved out
         constexpr std::array<std::byte, 4>   ebreak = {std::byte{0x73}, std::byte{0x00}, std::byte{0x10}, std::byte{0x00}};  // 32'h00100073
         constexpr std::array<std::byte, 2> c_ebreak = {std::byte{0x02}, std::byte{0x90}};                                    // 16'h9002
