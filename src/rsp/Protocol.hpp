@@ -6,6 +6,8 @@
 // Licensed under CERN-OHL-P v2 or later
 ///////////////////////////////////////////////////////////////////////////////
 
+#pragma once
+
 // C++ includes
 #include <string>
 #include <map>
@@ -44,6 +46,7 @@ namespace rsp {
 
         SHADOW m_shadow;
 
+    public:
         // constructor/destructor
         Protocol (std::string_view, SHADOW);
         ~Protocol ();
@@ -77,6 +80,9 @@ namespace rsp {
 
         // packet parser
         void parse       (std::string_view);
+
+        // main loop
+        void loop ();
 
         // helpers
         void query_supported     (std::string_view);

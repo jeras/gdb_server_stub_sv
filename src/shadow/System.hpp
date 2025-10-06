@@ -6,6 +6,8 @@
 // Licensed under CERN-OHL-P v2 or later
 ///////////////////////////////////////////////////////////////////////////////
 
+#pragma once
+
 // C includes
 #include <cstdint>
 #include <csignal>
@@ -23,12 +25,11 @@
 // HDLDB includes
 //#include "Instruction.hpp"
 #include "Core.hpp"
-#include "MemoryMap.hpp"
 #include "Points.hpp"
 
 namespace shadow {
 
-    template <typename XLEN, typename FLEN, typename CORE, typename MMAP, AddressMap AMAP, typename POINT>
+    template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
     class System {
 
         CORE m_core;
@@ -40,12 +41,12 @@ namespace shadow {
         // time
 
         // trace queue
-        vector<Retired> trace;
+        std::vector<Retired<XLEN, FLEN, VLEN>> m_trace;
 
     public:
-        // constructor/destructor
-        System ();
-        ~System ();
+//        // constructor/destructor
+//        System () = default;
+//        ~System () = default;
 
 //        // memory read/write
 //        std::span<std::byte> read (const int, const XLEN, const std::size_t);

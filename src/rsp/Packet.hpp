@@ -6,6 +6,11 @@
 // Licensed under CERN-OHL-P v2 or later
 ///////////////////////////////////////////////////////////////////////////////
 
+#pragma once
+
+// C includes
+#include <cstddef>
+
 // C++ includes
 #include <string>
 

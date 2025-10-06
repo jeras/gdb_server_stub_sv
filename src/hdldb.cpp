@@ -15,7 +15,7 @@
 int main() {
     std::println("Hello, World!");
 
-    SystemHdlDb shadow;
+    SystemHdlDb shadow { };
 
     rsp::Protocol<XlenHdlDb, SystemHdlDb> protocol { "1234", shadow };
 

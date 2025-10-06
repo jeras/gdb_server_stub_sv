@@ -6,6 +6,8 @@
 // Licensed under CERN-OHL-P v2 or later
 ///////////////////////////////////////////////////////////////////////////////
 
+#pragma once
+
 // C includes
 #include <cstddef>
 
@@ -27,9 +29,9 @@ namespace shadow {
         // core local memory mapped I/O registers (covers address space not covered by memories)
         std::map<XLEN, std::byte> m_i_o;
 
-        // constructor/destructor
-        MemoryMap () = default;
-        ~MemoryMap () = default;
+//        // constructor/destructor
+//        MemoryMap () = default;
+//        ~MemoryMap () = default;
 
         // memory read/write
         std::span<std::byte> read  (const XLEN, const std::size_t) const;

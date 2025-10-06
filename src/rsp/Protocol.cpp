@@ -622,4 +622,11 @@ namespace rsp {
         };
     };
 
+    ////////////////////////////////////////
+    // main loop
+    ////////////////////////////////////////
+
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::loop () { }
+
 };

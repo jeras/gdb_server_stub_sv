@@ -6,6 +6,8 @@
 // Licensed under CERN-OHL-P v2 or later
 ///////////////////////////////////////////////////////////////////////////////
 
+#pragma once
+
 // C includes
 #include <cstdint>
 #include <csignal>
@@ -27,7 +29,7 @@
 
 namespace shadow {
 
-    template <typename XLEN, typename FLEN, typename REGS, typename MMAP, typename POINT>
+    template <typename REGS, typename MMAP, typename POINT>
     class Core : REGS, MMAP, POINT {
 
         // instruction counter
@@ -39,9 +41,9 @@ namespace shadow {
         int        reason;
 
     public:
-        // constructor/destructor
-        Core () = default;
-        ~Core () = default;
+//        // constructor/destructor
+//        Core () = default;
+//        ~Core () = default;
     };
 
 };
