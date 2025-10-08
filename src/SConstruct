@@ -1,14 +1,18 @@
-DefaultEnvironment(CXX = 'g++-14', CPPPATH = ['.', 'rsp', 'shadow'])
+#DefaultEnvironment(CXX = 'g++-14', CPPPATH = ['.', 'rsp', 'shadow', 'test'])
+DefaultEnvironment(CXX = 'clang++', CPPPATH = ['.', 'rsp', 'shadow', 'test'])
 
 Program('hdldb', [
         'hdldb.cpp',
         'rsp/Socket.cpp',
         'rsp/Packet.cpp',
         'rsp/Protocol.cpp',
-        'shadow/Register.cpp',
+        'shadow/Registers.cpp',
         'shadow/MemoryMap.cpp',
         'shadow/Points.cpp',
+        'shadow/Core.cpp',
         'shadow/System.cpp'
     ],
-    CXXFLAGS = '-Wall -g -std=c++23'
+    CXXFLAGS = '-Wall -g -std=c++23 -fdiagnostics-color'
 )
+
+Program('test-vector', ['tests/test-vector.cpp'], CXXFLAGS = '-Wall -g -std=c++23')

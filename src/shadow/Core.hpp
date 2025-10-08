@@ -34,11 +34,6 @@ namespace shadow {
 
         // instruction counter
         size_t     cnt = 0;
-        // signal
-        int        signal = SIGTRAP;
-        // reason (point type/kind)
-//        Points<XLEN>::PointType reason;
-        int        reason;
 
     public:
 //        // constructor/destructor

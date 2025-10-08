@@ -32,7 +32,7 @@ namespace rsp {
         State m_state;
 
         // supported features
-        std::map<std::string, char> m_features_server {
+        std::map<std::string, std::string> m_features_server {
             {"swbreak"        , "+"},
             {"hwbreak"        , "+"},
             {"error-message"  , "+"},  // GDB (LLDB asks with QEnableErrorStrings)
@@ -42,7 +42,7 @@ namespace rsp {
             {"ReverseContinue", "+"},
             {"QStartNoAckMode", "+"}
         };
-        std::map<std::string, char> m_features_client { };
+        std::map<std::string, std::string> m_features_client { };
 
         SHADOW m_shadow;
 
@@ -56,33 +56,39 @@ namespace rsp {
 
         std::vector<std::byte> hex2bin (std::string_view) const;
         std::string bin2hex (std::span<std::byte>) const;
+        std::string bin2hex (std::string_view) const;
 
         // packet parsers
-        void mem_read    (std::string_view);
-        void mem_write   (std::string_view);
-        void reg_readall (std::string_view);
-        void reg_writeall(std::string_view);
-        void reg_readone (std::string_view);
-        void reg_writeone(std::string_view);
-        void point       (std::string_view);
+        void mem_read    (std::string_view packet);
+        void mem_write   (std::string_view packet);
+        void reg_readall (std::string_view packet);
+        void reg_writeall(std::string_view packet);
+        void reg_readone (std::string_view packet);
+        void reg_writeone(std::string_view packet);
+        void point       (std::string_view packet);
 
-        void run_step    (std::string_view);
-        void run_continue(std::string_view);
-        void run_backward(std::string_view);
-        void signal      (std::string_view);
+        void run_step    (std::string_view packet);
+        void run_continue(std::string_view packet);
+        void run_backward(std::string_view packet);
+        void signal      (std::string_view packet);
         void reset       ();
 
-        void query       (std::string_view);
-        void verbose     (std::string_view);
+        void query       (std::string_view packet);
+        void verbose     (std::string_view packet);
         void extended    ();
         void detach      ();
         void kill        ();
 
         // packet parser
-        void parse       (std::string_view);
+        void parse       (std::string_view packet);
 
         // main loop
         void loop ();
+
+        void error_number_reply  (std::uint8_t value);
+        void error_text_reply    (std::string_view text = "");
+        void error_lldb_reply    (std::uint8_t value = 0, std::string_view text = "");
+        void console_output      (std::string_view text);
 
         // helpers
         void query_supported     (std::string_view);

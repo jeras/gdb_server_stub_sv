@@ -8,10 +8,15 @@
 
 #pragma once
 
-namespace shadow {
+// C includes
+#include <cstddef>
 
-    //
-    enum class RegisterEnum : int {GPR, PC, FPR, VEC, CSR};
+// C++ includes
+#include <array>
+#include <vector>
+#include <span>
+
+namespace shadow {
 
     template <
         // register widths are defined as types
@@ -19,9 +24,11 @@ namespace shadow {
         typename FLEN,
         typename VLEN,
         // extensions
-        bool extE,  // 16 GPR register file
-        bool extF,  // floating point
-        bool extV   // vector
+        bool EXT_E,  // 16 GPR register file
+        bool EXT_F,  // floating point
+        bool EXT_V,  // vector
+        // list of target CSR as seen by GDB
+        std::array<bool, 4096> CSR_LIST
     >
 
     class RegistersRiscV {
@@ -37,12 +44,20 @@ namespace shadow {
         std::array<XLEN, 4096> m_csr;  // CSR (configuration status registers)
 
         // DUT access
-        XLEN write (const RegisterEnum, const unsigned int, const XLEN);
-        XLEN read  (const RegisterEnum, const unsigned int) const;
+        XLEN writeGpr (const unsigned int, const XLEN);
+        XLEN readGpr  (const unsigned int) const;
+        FLEN writeFpr (const unsigned int, const FLEN);
+        FLEN readFpr  (const unsigned int) const;
+        VLEN writeVec (const unsigned int, const VLEN);
+        VLEN readVec  (const unsigned int) const;
+        XLEN writeCsr (const unsigned int, const XLEN);
+        XLEN readCsr  (const unsigned int) const;
 
         // RSP access
-        void set (const unsigned int, const XLEN);
-        XLEN get (const unsigned int) const;
+        void writeAll (std::span<std::byte>);
+        std::vector<std::byte> readAll () const;
+        void writeOne (const unsigned int, std::span<std::byte>);
+        std::vector<std::byte> readOne (const unsigned int) const;
     };
 
 };

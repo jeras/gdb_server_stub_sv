@@ -21,13 +21,13 @@ namespace shadow {
         for (int unsigned blk=0; blk<AMAP.mem.size(); blk++) {
             if ((addr >= AMAP.mem[blk].base) &&
                 (addr <  AMAP.mem[blk].base + AMAP.mem[blk].size)) {
-                return { m_mem.data() + (adr - AMAP.mem[blk].base), size };
+                return { m_mem.data() + (addr - AMAP.mem[blk].base), size };
             };
         };
         // reading from an unmapped IO region (reads have higher priority)
         // TODO: handle access to nonexistent entries with a warning?
         // TODO: handle access with a size mismatch
-        return m_i_o[adr];
+        return m_i_o[addr];
     };
 
     // write to shadow memory map
@@ -40,12 +40,12 @@ namespace shadow {
         for (int unsigned blk=0; blk<AMAP.size; blk++) {
             if ((addr >= AMAP.mem[blk].base) &&
                 (addr <  AMAP.mem[blk].base + AMAP.mem[blk].size)) {
-                std::copy(m_mem.data() + (adr - AMAP.mem[blk].base), m_mem.data() + (adr - AMAP.mem[blk].base + size), data.data());
+                std::copy(m_mem.data() + (addr - AMAP.mem[blk].base), m_mem.data() + (addr - AMAP.mem[blk].base + data.size()), data.data());
                 return;
             };
         };
         // writing to an unmapped IO region (reads have higher priority)
-        m_i_o[adr] = dat;
+        m_i_o[addr] = data;
     };
 
 };

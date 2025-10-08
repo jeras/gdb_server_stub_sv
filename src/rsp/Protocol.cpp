@@ -11,6 +11,8 @@
 #include <iostream>
 #include <vector>
 #include <print>
+#include <sstream>
+#include <spanstream> // TODO: learn to use this
 
 // HDLDB includes
 #include "Protocol.hpp"
@@ -46,7 +48,7 @@ namespace rsp {
         std::vector<std::byte> bin { hex.size()/2 };
         for (size_t i = 0; i < hex.length(); i += 2) {
             std::string_view str = hex.substr(i, 2);
-            std::byte byte = static_cast<uint8_t>(std::stoi(str.data(), nullptr, 16));
+            std::byte byte = static_cast<std::byte>(std::stoi(str.data(), nullptr, 16));
             bin.push_back(byte);
         }
         return bin;
@@ -54,7 +56,20 @@ namespace rsp {
 
     template <typename XLEN, typename SHADOW>
     std::string Protocol<XLEN, SHADOW>::bin2hex (std::span<std::byte> bin) const {
-        return std::format("{::02x}", bin);
+        std::ostringstream hex;
+        for (auto& element: bin) {
+            hex << std::format("{:02x}", static_cast<uint8_t>(element));
+        }
+        return hex.str();
+    }
+
+    template <typename XLEN, typename SHADOW>
+    std::string Protocol<XLEN, SHADOW>::bin2hex (std::string_view bin) const {
+        std::ostringstream hex;
+        for (auto& element: bin) {
+            hex << std::format("{:02x}", element);
+        }
+        return hex.str();
     }
 
     ///////////////////////////////////////
@@ -121,37 +136,32 @@ namespace rsp {
 //    //    return(tx($sformatf("S%02h", sig)));
 //    endfunction: rsp_stop_reply
 //
-//    // send ERROR number reply (GDB only)
-//    // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
-//    function automatic int rsp_error_number_reply (
-//        input byte val = 0
-//    );
-//        return(tx($sformatf("E%02h", val)));
-//    endfunction: rsp_error_number_reply
-//
-//    // send ERROR text reply (GDB only)
-//    // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
-//    function automatic int rsp_error_text_reply (
-//        input string str = ""
-//    );
-//        return(tx($sformatf("E.%s", rsp_ascii2hex(str))));
-//    endfunction: rsp_error_text_reply
-//
-//    // send ERROR LLDB reply
-//    // https://lldb.llvm.org/resources/lldbgdbremote.html#qenableerrorstrings
-//    function automatic int rsp_error_lldb_reply (
-//        input byte   val = 0,
-//        input string str = ""
-//    );
-//        return(tx($sformatf("E%02h;%s", val, rsp_ascii2hex(str))));
-//    endfunction: rsp_error_lldb_reply
-//
-//    // send message to GDB console output
-//    function automatic int rsp_console_output (
-//        input string str
-//    );
-//        return(tx($sformatf("O%s", rsp_ascii2hex(str))));
-//    endfunction: rsp_console_output
+    // send ERROR number reply (GDB only)
+    // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::error_number_reply (std::uint8_t value) {
+        tx(std::format("E{:02x}", value));
+    }
+
+    // send ERROR text reply (GDB only)
+    // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::error_text_reply (std::string_view text) {
+        tx(std::format("E.{}", bin2hex(text)));
+    }
+
+    // send ERROR LLDB reply
+    // https://lldb.llvm.org/resources/lldbgdbremote.html#qenableerrorstrings
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::error_lldb_reply (std::uint8_t value, std::string_view text) {
+        tx(std::format("E{:02x};{}", value, bin2hex(text)));
+    }
+
+    // send message to GDB console output
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::console_output (std::string_view text) {
+        tx(std::format("O{}", bin2hex(text)));
+    }
 
     ///////////////////////////////////////
     // RSP query (monitor, )
@@ -219,8 +229,8 @@ namespace rsp {
     // https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html#General-Query-Packets
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::query_supported (std::string_view str) {
-        int code;
-
+//        int code;
+//
 //        // parse features supported by the GDB client
 //        for (const auto feature : std::views::split(str, ";"sv)) {
 //            int unsigned len = features[i].len();
@@ -364,10 +374,10 @@ namespace rsp {
 //                // TODO
 //            }
 //        } else
-//        // not supported, send empty response packet
-//        {
-//            tx("");
-//        }
+        // not supported, send empty response packet
+        {
+            tx("");
+        }
     }
 
     ////////////////////////////////////////

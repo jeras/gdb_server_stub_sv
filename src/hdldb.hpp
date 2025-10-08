@@ -22,18 +22,22 @@ using XlenHdlDb = std::uint32_t;
 using FlenHdlDb = std::uint32_t;
 using VlenHdlDb = std::uint32_t;  // TODO: placeholder
 
+constexpr std::array<bool, 4096> CsrListHdlDb { false };
+
 using PointHdlDb = shadow::Points<XlenHdlDb, FlenHdlDb, VlenHdlDb>;
 
-using RegsHdlDb = shadow::RegistersRiscV<XlenHdlDb, FlenHdlDb, VlenHdlDb, false, false, false>;
+using RegsHdlDb = shadow::RegistersRiscV<XlenHdlDb, FlenHdlDb, VlenHdlDb, false, false, false, CsrListHdlDb>;
 
-constexpr shadow::AddressMap<XlenHdlDb, 1, 1> AmapCoreHdlDb { { { 0x8000'0000, 0x0001'0000 } }, { { 0x8001'0000, 0x0001'0000 } } };
+constexpr shadow::AddressMap<XlenHdlDb, 1, 1> AmapCoreHdlDb { { { { 0x8000'0000, 0x0001'0000 } } }, { { { 0x8001'0000, 0x0001'0000 } } } };
 
 using MmapCoreHdlDb = shadow::MemoryMap<XlenHdlDb, AmapCoreHdlDb>;
 
 using CoreHdlDb = shadow::Core<RegsHdlDb, MmapCoreHdlDb, PointHdlDb>;
 
-constexpr shadow::AddressMap<XlenHdlDb, 1, 1> AmapSystemHdlDb { { { 0x8002'0000, 0x0001'0000 } }, { { 0x8003'0000, 0x0001'0000 } } };
+constexpr shadow::AddressMap<XlenHdlDb, 1, 1> AmapSystemHdlDb { { { { 0x8002'0000, 0x0001'0000 } } }, { { { 0x8003'0000, 0x0001'0000 } } } };
 
 using MmapSystemHdlDb = shadow::MemoryMap<XlenHdlDb, AmapSystemHdlDb>;
 
 using SystemHdlDb = shadow::System<XlenHdlDb, FlenHdlDb, VlenHdlDb, CoreHdlDb, MmapSystemHdlDb, PointHdlDb>;
+
+using ProtocolHdlDb = rsp::Protocol<XlenHdlDb, SystemHdlDb>;

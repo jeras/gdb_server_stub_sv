@@ -17,7 +17,7 @@ int main() {
 
     SystemHdlDb shadow { };
 
-    rsp::Protocol<XlenHdlDb, SystemHdlDb> protocol { "1234", shadow };
+    ProtocolHdlDb protocol { "1234", shadow };
 
     protocol.loop();
 

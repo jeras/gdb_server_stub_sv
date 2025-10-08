@@ -179,3 +179,176 @@ I would assume the sequence of events would be something like this:
 5.  cause the release of the RESET and the program would execute normally.3b. `stepi` would release the reset and stop at the first instruction at address
 
 I am actually working on a solution for debugging SW while it runs withing a cycle accurate HDL simulation, the added restriction is, that the debugger never affects the cycle accuracy of the execution and there will be the option to reverse step/continue.
+
+/home/izi/VLSI/rp32/submodules/gdb_server_stub_sv/src/hdldb.cpp:20:(.text+0xcf): undefined reference to 
+`rsp::Protocol<
+    unsigned int,
+    shadow::System<
+        unsigned int,
+        unsigned int,
+        unsigned int,
+        shadow::Core<
+            shadow::RegistersRiscV<
+                unsigned int,
+                unsigned int, 
+                unsigned int, 
+                false, 
+                false, 
+                false, 
+                std::array<
+                    bool, 
+                    4096ul
+                >{}
+            >, 
+            shadow::MemoryMap<
+                unsigned int, 
+                shadow::AddressMap<
+                    unsigned int, 
+                    1ul, 
+                    1ul
+                >{std::array<
+                    shadow::AddressBlock<
+                        unsigned int
+                    >,
+                    1ul
+                >{shadow::AddressBlock<
+                    unsigned int
+                > [1]{shadow::AddressBlock<
+                    unsigned int
+                >{2147483648u, 65536u}}},
+                std::array<
+                    shadow::AddressBlock<
+                        unsigned int
+                    >,
+                    1ul
+                >{shadow::AddressBlock<
+                    unsigned int
+                > [1]{shadow::AddressBlock<
+                    unsigned int
+                >{2147549184u, 65536u}}}}
+            >,
+            shadow::Points<
+                unsigned int,
+                unsigned int,
+                unsigned int
+            >
+        >,
+        shadow::MemoryMap<
+            unsigned int,
+            shadow::AddressMap<
+                unsigned int,
+                1ul,
+                1ul
+            >{std::array<
+                shadow::AddressBlock<
+                    unsigned int
+                >,
+                1ul
+            >{shadow::AddressBlock<
+                unsigned int
+            > [1]{shadow::AddressBlock<
+                unsigned int
+            >{2147614720u, 65536u}}},
+            std::array<
+                shadow::AddressBlock<
+                    unsigned int
+                >,
+                1ul
+            >{shadow::AddressBlock<
+                unsigned int
+            > [1]{shadow::AddressBlock<
+                unsigned int
+            >{2147680256u, 65536u}}}}
+        >,
+        shadow::Points<
+            unsigned int,
+            unsigned int,
+            unsigned int
+        >
+    >
+>::Protocol(std::basic_string_view<
+    char,
+    std::char_traits<
+        char
+    >
+>,
+shadow::System<
+    unsigned int,
+    unsigned int,
+    unsigned int,
+    shadow::Core<
+        shadow::RegistersRiscV<
+            unsigned int, 
+            unsigned int, 
+            unsigned int, 
+            false, false, false, 
+            std::array<
+                bool, 
+                4096ul
+            >{}
+        >, 
+        shadow::MemoryMap<
+            unsigned int, 
+            shadow::AddressMap<
+                unsigned int, 
+                1ul, 
+                1ul
+            >{std::array<
+                shadow::AddressBlock<
+                    unsigned int
+                >,
+                1ul
+            >{shadow::AddressBlock<
+                unsigned int
+            > [1]{shadow::AddressBlock<
+                unsigned int
+            >{2147483648u, 65536u}}},
+            std::array<
+                shadow::AddressBlock<
+                    unsigned int
+                >,
+                1ul
+            >{shadow::AddressBlock<
+                unsigned int
+            > [1]{shadow::AddressBlock<
+                unsigned int
+            >{2147549184u, 65536u}}}}
+        >, shadow::Points<
+            unsigned int, 
+            unsigned int, 
+            unsigned int
+        >
+    >,
+    shadow::MemoryMap<
+        unsigned int, 
+        shadow::AddressMap<
+            unsigned int, 
+            1ul, 
+            1ul
+        >{std::array<
+            shadow::AddressBlock<
+                unsigned int
+            >,
+            1ul
+        >{shadow::AddressBlock<
+            unsigned int
+        > [1]{shadow::AddressBlock<
+            unsigned int
+        >{2147614720u, 65536u}}}, 
+        std::array<
+            shadow::AddressBlock<
+                unsigned int
+            >, 
+            1ul
+        >{shadow::AddressBlock<
+            unsigned int
+        > [1]{shadow::AddressBlock<
+            unsigned int
+        >{2147680256u, 65536u}}}}
+    >, shadow::Points<
+        unsigned int, 
+        unsigned int, 
+        unsigned int
+    >
+>)'
+    
