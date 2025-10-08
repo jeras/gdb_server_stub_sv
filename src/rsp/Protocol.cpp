@@ -72,6 +72,11 @@ namespace rsp {
         return hex.str();
     }
 
+    template <typename XLEN, typename SHADOW>
+    constexpr size_t Protocol<XLEN, SHADOW>::lit2hash (std::string_view str) const {
+        return std::hash<std::string_view>{}(str);
+    }
+
     ///////////////////////////////////////
     // RSP signal
     ///////////////////////////////////////
@@ -178,8 +183,8 @@ namespace rsp {
     // https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html#General-Query-Packets
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::query_monitor (std::string_view str) {
-        switch (str) {
-            case "help":
+        switch (std::hash<std::string_view>{}(str)) {
+            case lit2hash("help"):
                 query_monitor_reply("HELP: Available monitor commands:\n"
                     "* 'set remote log on/off',\n"
                     "* 'set waveform dump on/off',\n"
@@ -187,36 +192,36 @@ namespace rsp {
                     "* 'set memory=dut/shadow' (reading memories from dut/shadow, default is shadow),\n"
                     "* 'reset assert' (assert reset for a few clock periods),\n"
                     "* 'reset release' (synchronously release reset).");
-            case "set remote log on":
+            case lit2hash("set remote log on"):
                 m_state.remote_log = true;
                 query_monitor_reply("Enabled remote logging to STDOUT.\n");
-            case "set remote log off":
+            case lit2hash("set remote log off"):
                 m_state.remote_log = false;
                 query_monitor_reply("Disabled remote logging.\n");
-            case "set waveform dump on":
+            case lit2hash("set waveform dump on"):
 //                $dumpon;
                 query_monitor_reply("Enabled waveform dumping.\n");
-            case "set waveform dump off":
+            case lit2hash("set waveform dump off"):
 //                $dumpoff;
                 query_monitor_reply("Disabled waveform dumping.\n");
-            case "set register=dut":
+            case lit2hash("set register=dut"):
                 m_state.dut_register = true;
                 query_monitor_reply("Reading registers directly from DUT.\n");
-            case "set register=shadow":
+            case lit2hash("set register=shadow"):
                 m_state.dut_register = false;
                 query_monitor_reply("Reading registers from shadow copy.\n");
-            case "set memory=dut":
+            case lit2hash("set memory=dut"):
                 m_state.dut_memory = true;
                 query_monitor_reply("Reading memory directly from DUT.\n");
-            case "set memory=shadow":
+            case lit2hash("set memory=shadow"):
                 m_state.dut_memory = false;
                 query_monitor_reply("Reading memory from shadow copy.\n");
-            case "reset assert":
+            case lit2hash("reset assert"):
 //                dut_reset_assert;
                 // TODO: rethink whether to reset the shadow or keep it
                 //shd = new();
                 query_monitor_reply("DUT reset asserted.\n");
-            case "reset release":
+            case lit2hash("reset release"):
 //                dut_reset_release;
                 query_monitor_reply("DUT reset released.\n");
             default:

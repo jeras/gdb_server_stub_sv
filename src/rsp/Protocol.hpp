@@ -54,9 +54,10 @@ namespace rsp {
         std::string_view rx ();
         void tx (std::string_view);
 
-        std::vector<std::byte> hex2bin (std::string_view) const;
-        std::string bin2hex (std::span<std::byte>) const;
-        std::string bin2hex (std::string_view) const;
+        std::vector<std::byte> hex2bin (std::string_view hex) const;
+        std::string bin2hex (std::span<std::byte> bin) const;
+        std::string bin2hex (std::string_view str) const;
+        constexpr size_t lit2hash (std::string_view str) const;
 
         // packet parsers
         void mem_read    (std::string_view packet);
