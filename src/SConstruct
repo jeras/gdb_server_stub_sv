@@ -12,7 +12,8 @@ Program('hdldb', [
         'shadow/Core.cpp',
         'shadow/System.cpp'
     ],
-    CXXFLAGS = '-Wall -g -std=c++23 -fdiagnostics-color'
+    CXXFLAGS = '-Wall -g -std=c++23 -fdiagnostics-color',
+    LINKFLAGS = '-v -fuse-ld=lld -Wl,-plugin,/usr/lib/LLVMgold.so'
 )
 
 Program('test-vector', ['tests/test-vector.cpp'], CXXFLAGS = '-Wall -g -std=c++23')

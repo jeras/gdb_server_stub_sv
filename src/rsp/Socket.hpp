@@ -43,11 +43,6 @@ namespace rsp {
         // client file descriptor
         int m_clientFd;
 
-        // constructor
-        Socket(std::string_view);
-        // destructor
-        ~Socket();
-
         // create a UNIX socket and mark it as passive
         void listenUnix (std::string_view);
         // create a TCP socket and mark it as passive
@@ -58,6 +53,11 @@ namespace rsp {
         void acceptTcp ();
 
     protected:
+        // constructor
+        Socket(std::string_view name);
+        // destructor
+        ~Socket();
+
         // stream
         int& stream {m_clientFd};
 

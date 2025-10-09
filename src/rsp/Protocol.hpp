@@ -86,6 +86,9 @@ namespace rsp {
         // main loop
         void loop ();
 
+        void rsp_signal          ();
+        void stop_reply          (int index = -1, XLEN value = 0,  // register
+                                  int thread = -1, int core = -1);  // thread/core
         void error_number_reply  (std::uint8_t value);
         void error_text_reply    (std::string_view text = "");
         void error_lldb_reply    (std::uint8_t value = 0, std::string_view text = "");

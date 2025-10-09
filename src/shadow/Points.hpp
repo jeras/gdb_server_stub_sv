@@ -8,6 +8,9 @@
 
 #pragma once
 
+// C includes
+#include <signal.h>
+
 // C++ includes
 #include <map>
 

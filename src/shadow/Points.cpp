@@ -35,6 +35,7 @@ namespace shadow {
             case PointType::awatch:
                 m_watch.insert(addr) = {type, kind};
                 return m_watch.size();
+            default:
         };
     };
 
@@ -55,6 +56,7 @@ namespace shadow {
             case PointType::awatch:
                 m_watch.erase(addr);
                 return m_watch.size();
+            default:
         };
     };
 
@@ -64,7 +66,7 @@ namespace shadow {
         XLEN addr;
 
                                  addr = ret.ifu.adr;
-        std::array<std::byte, 4> inst = ret.ifu.rdt;
+//        std::array<std::byte, 4> inst = ret.ifu.rdt;
         // match illegal instruction
         if (ret.ifu.ill) {
             m_signal = SIGILL;
@@ -72,21 +74,21 @@ namespace shadow {
             return true;
         }
 
-        // match software breakpoint
-        // match EBREAK/C.EBREAK instruction
-        // TODO: this is RISC-V specific code
-        else if (std::equal(ebreak.begin(), ebreak.end(), inst)) {
-            m_signal = SIGTRAP;
-            m_reason = {PointType::swbreak, 4};
-    //            $display("DEBUG: Triggered SW breakpoint at address %h.", addr);
-            return true;
-        }
-        else if (std::equal(c_ebreak.begin(), c_ebreak.end(), inst)) {
-            m_signal = SIGTRAP;
-            m_reason = {PointType::swbreak, 2};
-    //            $display("DEBUG: Triggered SW breakpoint at address %h.", addr);
-            return true;
-        }
+//        // match software breakpoint
+//        // match EBREAK/C.EBREAK instruction
+//        // TODO: this is RISC-V specific code
+//        else if (std::equal(ebreak.begin(), ebreak.end(), inst)) {
+//            m_signal = SIGTRAP;
+//            m_reason = {PointType::swbreak, 4};
+//    //            $display("DEBUG: Triggered SW breakpoint at address %h.", addr);
+//            return true;
+//        }
+//        else if (std::equal(c_ebreak.begin(), c_ebreak.end(), inst)) {
+//            m_signal = SIGTRAP;
+//            m_reason = {PointType::swbreak, 2};
+//    //            $display("DEBUG: Triggered SW breakpoint at address %h.", addr);
+//            return true;
+//        }
 
         // match hardware breakpoint
         else if (m_break.contains(addr)) {

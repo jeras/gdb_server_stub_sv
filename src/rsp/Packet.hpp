@@ -32,6 +32,9 @@ namespace rsp {
         void log(std::string_view) const;
 
     protected:
+        // constructor
+        Packet(std::string_view name) : Socket(name) { };
+
         // handling packets
         std::string_view rx (bool acknowledge);
         void tx (std::string_view, bool acknowledge) const;

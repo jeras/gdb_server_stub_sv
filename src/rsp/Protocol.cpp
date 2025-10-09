@@ -15,7 +15,8 @@
 #include <spanstream> // TODO: learn to use this
 
 // HDLDB includes
-#include "Protocol.hpp"
+#include <Points.hpp>
+#include <Protocol.hpp>
 
 namespace rsp {
 
@@ -81,66 +82,61 @@ namespace rsp {
     // RSP signal
     ///////////////////////////////////////
 
-//    // in response to '?'
-//    function automatic int rsp_signal();
-//        string pkt;
-//        int status;
-//
-//        // read packet
-//        status = rsp_get_packet(pkt);
-//
-//        // reply with current signal
-//        status = rsp_stop_reply();
-//        return(status);
-//    endfunction: rsp_signal
-//
-//    // TODO: Send a exception packet "T <value>"
-//    function automatic int rsp_stop_reply (
-//        // register
-//        input int unsigned idx = -1,
-//        input [XLEN-1:0]   val = 'x,
-//        // thread
-//        input int thr = -1,
-//        // core
-//        input int unsigned core = -1
-//    );
-//        string str;
-//        // reply with signal/register/thread/core/reason
-//        str = $sformatf("T%02h;", shd.sig);
-//        // register
-//        if (idx != -1) {
-//            case (XLEN)
-//                32: str = {str, $sformatf("%0h:%08h;", idx, val)};
-//                64: str = {str, $sformatf("%0h:%016h;", idx, val)};
-//            endcase
-//        end
-//        // thread
-//        if (thr != -1) {
-//            str = {str, $sformatf("thread:%s;", sformat_thread(1, thr))};
-//        end
-//        // core
-//        if (core != -1) {
-//            str = {str, $sformatf("core:%h;", core)};
-//        end
-//        // reason
-//        case (shd.rsn.ptype)
-//            watch, rwatch, awatch: {
-//                str = {str, $sformatf("%s:%h;", shd.rsn.ptype.name, shd.ret.lsu.adr)};
-//            end
-//            swbreak, hwbreak: {
-//                str = {str, $sformatf("%s:;", shd.rsn.ptype.name)};
-//            end
-//            replaylog: {
-//                str = {str, $sformatf("%s:%s;", shd.rsn.ptype.name, shd.cnt == 0 ? "begin" : "end")};
-//            end
-//        endcase
-//        // remove the trailing semicolon
-//        str = str.substr(0, str.len()-2);
-//        return(tx(str));
-//    //    // reply with signal (current signal by default)
-//    //    return(tx($sformatf("S%02h", sig)));
-//    endfunction: rsp_stop_reply
-//
+    // in response to '?'
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::rsp_signal() {
+        // reply with current signal
+        stop_reply();
+    }
+
+    // TODO: Send a exception packet "T <value>"
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::stop_reply (int index, XLEN value,  // register
+                                             int thread, int core)  // thread/core
+    {
+        // reply with signal/register/thread/core/reason
+        std::string str { std::format("T{:02x}", m_shadow.signal) };
+        // register
+        if (index != -1) {
+            switch (sizeof(XLEN)*8) {
+                case 32: str += std::format(";{:0x}:P{:08x}", index, value);
+                case 64: str += std::format(";{:0x}:P{:016x}", index, value);
+            }
+        }
+        // thread
+        if (thread != -1) {
+            str += std::format(";thread:{}", format_thread(1, thread));
+        }
+        // core
+        if (core != -1) {
+            str += std::format(";core:{:x}", core);
+        }
+        // reason
+        switch (m_shadow.reason.ptype) {
+            case shadow::PointType::watch:
+                str += std::format(";{}:{:x}", "watch", m_shadow.ret.lsu.adr);
+                break;
+            case shadow::PointType::rwatch:
+                str += std::format(";{}:{:x}", "rwatch", m_shadow.ret.lsu.adr);
+                break;
+            case shadow::PointType::awatch:
+                str += std::format(";{}:{:x}", "awatch", m_shadow.ret.lsu.adr);
+                break;
+            case shadow::PointType::swbreak:
+                str += std::format(";{}:", "swbreak");
+                break;
+            case shadow::PointType::hwbreak:
+                str += std::format(";{}:", "hwbreak");
+                break;
+            case shadow::PointType::replaylog:
+                str += std::format(";{}:{}", "replaylog", m_shadow.cnt == 0 ? "begin" : "end");
+                break;
+        }
+        tx(str);
+    //    // reply with signal (current signal by default)
+    //    tx(std::format("S{:02x}", m_shadow.signal));
+    }
+
     // send ERROR number reply (GDB only)
     // https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html#Standard-Replies
     template <typename XLEN, typename SHADOW>
@@ -192,38 +188,49 @@ namespace rsp {
                     "* 'set memory=dut/shadow' (reading memories from dut/shadow, default is shadow),\n"
                     "* 'reset assert' (assert reset for a few clock periods),\n"
                     "* 'reset release' (synchronously release reset).");
+                break;
             case lit2hash("set remote log on"):
                 m_state.remote_log = true;
                 query_monitor_reply("Enabled remote logging to STDOUT.\n");
+                break;
             case lit2hash("set remote log off"):
                 m_state.remote_log = false;
                 query_monitor_reply("Disabled remote logging.\n");
+                break;
             case lit2hash("set waveform dump on"):
 //                $dumpon;
                 query_monitor_reply("Enabled waveform dumping.\n");
+                break;
             case lit2hash("set waveform dump off"):
 //                $dumpoff;
                 query_monitor_reply("Disabled waveform dumping.\n");
+                break;
             case lit2hash("set register=dut"):
                 m_state.dut_register = true;
                 query_monitor_reply("Reading registers directly from DUT.\n");
+                break;
             case lit2hash("set register=shadow"):
                 m_state.dut_register = false;
                 query_monitor_reply("Reading registers from shadow copy.\n");
+                break;
             case lit2hash("set memory=dut"):
                 m_state.dut_memory = true;
                 query_monitor_reply("Reading memory directly from DUT.\n");
+                break;
             case lit2hash("set memory=shadow"):
                 m_state.dut_memory = false;
                 query_monitor_reply("Reading memory from shadow copy.\n");
+                break;
             case lit2hash("reset assert"):
 //                dut_reset_assert;
                 // TODO: rethink whether to reset the shadow or keep it
                 //shd = new();
                 query_monitor_reply("DUT reset asserted.\n");
+                break;
             case lit2hash("reset release"):
 //                dut_reset_release;
                 query_monitor_reply("DUT reset released.\n");
+                break;
             default:
                 query_monitor_reply("'monitor' command was not recognized.\n");
         }
@@ -267,9 +274,9 @@ namespace rsp {
 
     template <typename XLEN, typename SHADOW>
     std::string Protocol<XLEN, SHADOW>::format_thread (int process, int thread) {
-        switch (m_features_server["multiprocess"]) {
-            case "+": return std::format("p{:x},{:x}", process, thread);
-            case "-": return std::format("{:0x}", thread);
+        switch (m_features_server["multiprocess"][0]) {
+            case '+': return std::format("p{:x},{:x}", process, thread);
+            case '-': return std::format("{:0x}", thread);
         }
     }
 
@@ -278,9 +285,9 @@ namespace rsp {
         int code;
         int process;
         int thread;
-        switch (m_features_server["multiprocess"]) {
-            case "+": code = std::sscanf(str.data(), "p%x,%x;", &process, &thread);
-            case "-": code = std::sscanf(str.data(), "%x", &thread);
+        switch (m_features_server["multiprocess"][0]) {
+            case '+': code = std::sscanf(str.data(), "p%x,%x;", &process, &thread);
+            case '-': code = std::sscanf(str.data(), "%x", &thread);
         }
         return(thread);
     }
@@ -291,7 +298,7 @@ namespace rsp {
 
         // parse various query packets
         if (std::sscanf(packet.data(), "qSupported:%s", str.data()) > 0) {
-            std::println("DEBUG: qSupported = { }", str.data());
+            std::println("DEBUG: qSupported = {}", str.data());
             query_supported(str);
         } else
         // parse various monitor packets
@@ -326,9 +333,8 @@ namespace rsp {
         } else
         // query extra info for given thread
         if (std::sscanf(packet.data(), "qThreadExtraInfo,%s", str) > 0) {
-            int thr;
-//            thr = sscan_thread(str);
-//            std::println("DEBUG: qThreadExtraInfo: str = %p, thread = %0d, THREADS[%0d-1] = %s", str, thr, thr, THREADS[thr-1]);
+//            int thread = sscan_thread(str);
+//            std::println("DEBUG: qThreadExtraInfo: str = {}, thread = {:0d}, THREADS[{:0d}-1] = {}", str, thread, thread, THREADS[thread-1]);
 //            tx(bin2hex(THREADS[thr-1]));
         } else
         // query first thread info
@@ -355,18 +361,18 @@ namespace rsp {
     void Protocol<XLEN, SHADOW>::verbose (std::string_view packet) {
         std::string str;
 
-//        // interrupt signal
-//        if (packet == "vCtrlC") {
-////            shd.sig = SIGINT;
-////            tx("OK");
-//            tx("");
-//        } else
-//        // list actions supported by the ‘vCont?’ packet
-//        if (packet == "vCont?") {
-//            tx("vCont;c:C;s:S");
-//        }
-//        // parse 'vCont' packet
-//        if (std::sscanf(packet.data(), "vCont;%s", str) > 0) {
+        // interrupt signal
+        if (packet == "vCtrlC") {
+//            shd.sig = SIGINT;
+//            tx("OK");
+            tx("");
+        } else
+        // list actions supported by the ‘vCont?’ packet
+        if (packet == "vCont?") {
+            tx("vCont;c:C;s:S");
+        }
+        // parse 'vCont' packet
+        if (std::sscanf(packet.data(), "vCont;%s", str.data()) > 0) {
 //            string_queue_t features;
 //            string action;
 //            string thread;
@@ -378,7 +384,7 @@ namespace rsp {
 //                int code = $sscanf(features[i], "%s %s", action, thread);
 //                // TODO
 //            }
-//        } else
+        } else
         // not supported, send empty response packet
         {
             tx("");
@@ -642,6 +648,8 @@ namespace rsp {
     ////////////////////////////////////////
 
     template <typename XLEN, typename SHADOW>
-    void Protocol<XLEN, SHADOW>::loop () { }
+    void Protocol<XLEN, SHADOW>::loop () {
+        std::println("Hello from HDLDB!");
+    }
 
 };
