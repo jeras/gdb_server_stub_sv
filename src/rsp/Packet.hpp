@@ -31,7 +31,7 @@ namespace rsp {
         // logging
         void log(std::string_view) const;
 
-    protected:
+    public:
         // constructor
         Packet(std::string_view name) : Socket(name) { };
 
