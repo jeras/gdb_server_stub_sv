@@ -48,9 +48,9 @@ namespace rsp {
         std::string_view packet { reinterpret_cast<char const*>(m_buffer.data()), static_cast<size_t>(size) };
         std::string_view packet_data     = packet.substr(1, size-4);
         std::string_view packet_checksum = packet.substr(size-2, 2);
-        uint8_t checksum_pkt = static_cast<uint8_t>(std::stoi(packet_checksum.data()));
+        uint8_t checksum_pkt = static_cast<uint8_t>(std::stoi(packet_checksum.data(), nullptr, 16));
 
-        log(std::format("REMOTE: <- {}", packet_data));
+        log(std::format("REMOTE: <- {}\n", packet_data));
 
         // calculate payload checksum
         std::span payload { reinterpret_cast<uint8_t const*>(packet_data.data()), packet_data.size() };
@@ -67,7 +67,7 @@ namespace rsp {
     };
 
     void Packet::tx (std::string_view packet_data, bool acknowledge) const {
-        log(std::format("REMOTE: -> {}", packet_data));
+        log(std::format("REMOTE: -> {}\n", packet_data));
 
         // calculate payload checksum
         std::span payload { reinterpret_cast<uint8_t const*>(packet_data.data()), packet_data.size() };

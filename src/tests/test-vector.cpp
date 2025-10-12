@@ -10,8 +10,27 @@
 #include <cstddef>
 
 // C++ includes
+#include <numeric>
 #include <print>
+#include <string>
 #include <vector>
+#include <span>
+
+
+void test_accumulate () {
+    uint8_t sum;
+    std::vector<uint8_t> data_vector {0,1,2,3,4,5,6,7,8,9};
+    sum = std::accumulate(data_vector.begin(), data_vector.end(), 0);
+    std::println("sum(data_vector) = {}", sum);
+//    std::string data_string { "HELLO" };
+    std::string data_string { "Hello from client to server!" };
+    std::span<uint8_t> data_span { reinterpret_cast<uint8_t *>(data_string.data()), data_string.size() };
+    sum = std::accumulate(data_span.begin(), data_span.end(), 0);
+    std::print("sum(data_span) = {} = {:02x} = ", sum, sum);
+    for (auto& element : data_span) {
+       std::print("{}+", element);
+    }
+}
 
 int main() {
     std::vector<int> values { 11, 22, 33 };
@@ -39,6 +58,8 @@ int main() {
        std::println("values = {}.", element);
     }
 //    std::println("values = {:n}.", values);
+
+    test_accumulate();
     return 0;
 }
 

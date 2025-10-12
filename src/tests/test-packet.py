@@ -4,7 +4,8 @@ import os
 # format packet
 def format_packet (text: str) -> bytes:
     packet = f"${text}#{sum(text.encode())%0x100:02x}"
-    print("FORMAT: {} [{}]", packet, len(packet))
+#    print("FORMAT: {} [{}]", packet, len(packet))
+#    print("text.encode() = {}", text.encode())
     return packet.encode()
 
 def scan_packet (packet: bytes) -> str:
