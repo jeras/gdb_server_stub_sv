@@ -47,14 +47,14 @@ namespace rsp {
 
         std::string_view packet { reinterpret_cast<char const*>(m_buffer.data()), static_cast<size_t>(size) };
         std::string_view packet_data     = packet.substr(1, size-4);
-        std::string_view packet_checksum = packet.substr(size-4, 2);
+        std::string_view packet_checksum = packet.substr(size-2, 2);
         uint8_t checksum_pkt = static_cast<uint8_t>(std::stoi(packet_checksum.data()));
 
         log(std::format("REMOTE: <- {}", packet_data));
 
         // calculate payload checksum
         std::span payload { reinterpret_cast<uint8_t const*>(packet_data.data()), packet_data.size() };
-        uint8_t checksum_ref { static_cast<uint8_t>(std::accumulate(cbegin(payload), cend(payload), 0)) };
+        uint8_t checksum_ref { static_cast<uint8_t>(std::accumulate(payload.begin(), payload.end(), 0)) };
 
         // Verify checksum
         if (checksum_pkt == checksum_ref) {

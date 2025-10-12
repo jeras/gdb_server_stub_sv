@@ -3,7 +3,8 @@ import os
 
 # format packet
 def format_packet (text: str) -> bytes:
-    packet = f"${text}#{sum(text.encode()):02x}"
+    packet = f"${text}#{sum(text.encode())%0x100:02x}"
+    print("FORMAT: {} [{}]", packet, len(packet))
     return packet.encode()
 
 def scan_packet (packet: bytes) -> str:
@@ -11,11 +12,8 @@ def scan_packet (packet: bytes) -> str:
     packet_checksum = packet[-2:-1]
     return packet_payload.decode()
 
-tmp = format_packet("Test text.")
-print(tmp)
-
 # Set the path for the Unix socket
-socket_path = '../build/unix-socket'
+socket_path = '../../unix-socket'
 
 # Create the Unix socket client
 client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

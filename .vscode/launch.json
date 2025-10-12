@@ -1,0 +1,19 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "test-packet - Build and debug",
+            "request": "launch",
+            "type": "cppdbg",
+            "envFile": "${workspaceFolder}/${config:mesonbuild.buildFolder}/meson-vscode.env",
+            "program": "${workspaceFolder}/${config:mesonbuild.buildFolder}/test-packet",
+            "args": [],
+            "stopAtEntry": false,
+            "preLaunchTask": "Meson: Build all targets",
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
