@@ -2,9 +2,6 @@
     "editor.fontFamily": "Fira Code",
     "editor.fontLigatures": true,
 
-    "C_Cpp.default.cppStandard": "c++23",
-    "C_Cpp.default.cStandard": "c23",
-
     "makefile.configureOnOpen": false,
     "files.associations": {
         "**/project.sigasi": "jsonc",
@@ -67,6 +64,6 @@
         "variant": "cpp",
         "sstream": "cpp"
     },
-    "C_Cpp.default.compileCommands": "/home/izi/VLSI/rp32/submodules/gdb_server_stub_sv/src/builddir/compile_commands.json",
+    "C_Cpp.default.compileCommands": "/home/izi/VLSI/rp32/submodules/gdb_server_stub_sv/builddir/compile_commands.json",
     "C_Cpp.default.configurationProvider": "mesonbuild.mesonbuild"
 }

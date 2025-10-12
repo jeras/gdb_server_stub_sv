@@ -1,0 +1,17 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/src/**"
+            ],
+            "defines": [],
+            "intelliSenseMode": "linux-clang-x64",
+            "configurationProvider": "mesonbuild.mesonbuild",
+            "cppStandard": "c++23",
+            "cStandard": "c23",
+            "compilerPath": "/usr/bin/clang++-18"
+        }
+    ],
+    "version": 4
+}
