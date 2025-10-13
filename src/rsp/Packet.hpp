@@ -39,4 +39,5 @@ namespace rsp {
         std::string_view rx (bool acknowledge);
         void tx (std::string_view, bool acknowledge) const;
     };
-};
+
+}

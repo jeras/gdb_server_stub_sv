@@ -70,4 +70,4 @@ namespace rsp {
         ssize_t recv (std::span<      std::byte>, int flags) const;
     };
 
-};
+}

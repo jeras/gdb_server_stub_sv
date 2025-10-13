@@ -35,7 +35,7 @@ namespace rsp {
 
     void Packet::log (std::string_view packet_data) const {
         std::cout << packet_data;
-    };
+    }
 
     std::string_view Packet::rx (bool acknowledge) {
         ssize_t status;
@@ -62,9 +62,9 @@ namespace rsp {
         } else {
             if (acknowledge)  send(NACK, 0);
             throw std::runtime_error { "Sending NACK (due to parity error)." };
-        };
+        }
         return packet_data;
-    };
+    }
 
     void Packet::tx (std::string_view packet_data, bool acknowledge) const {
         log(std::format("REMOTE: -> {}\n", packet_data));
@@ -89,6 +89,6 @@ namespace rsp {
             std::array<std::byte, 1> ack;
             ssize_t status = recv(ack, 0);
             if (ack == NACK)  throw std::runtime_error { "Received NACK." };
-        };
-    };
-};
+        }
+    }
+}
