@@ -65,5 +65,11 @@
         "sstream": "cpp"
     },
     "C_Cpp.default.compileCommands": "/home/izi/VLSI/rp32/submodules/gdb_server_stub_sv/builddir/compile_commands.json",
-    "C_Cpp.default.configurationProvider": "mesonbuild.mesonbuild"
+    "C_Cpp.default.configurationProvider": "mesonbuild.mesonbuild",
+    "terminal.integrated.env.linux": {        
+        "CC": "clang",
+        "CC_LD": "lld",
+        "CXX": "clang++",
+        "CXX_LD": "lld"
+    }
 }
