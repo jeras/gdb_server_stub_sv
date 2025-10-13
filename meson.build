@@ -1,8 +1,8 @@
-# CC=clang CXX=clang++ CC_LD=lld CXX_LD=lld meson setup build
+# CC=clang CXX=clang++ CC_LD=lld CXX_LD=lld meson setup builddir
 
 project('hdldb', 'cpp', default_options : ['c_std=c11', 'cpp_std=c++23'])
 
-incdir = include_directories('src/rsp', 'src/shadow', 'src')
+incdir = include_directories('src/rsp', 'src/shadow', 'src', 'submodules/cxxopts/include/')
 
 executable('test-vector', 'src/tests/test-vector.cpp')
 

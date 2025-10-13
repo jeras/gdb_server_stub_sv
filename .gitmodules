@@ -7,3 +7,6 @@
 [submodule "submodules/qemu_arm_samples"]
 	path = submodules/qemu_arm_samples
 	url = git@github.com:dwelch67/qemu_arm_samples.git
+[submodule "submodules/cxxopts"]
+	path = submodules/cxxopts
+	url = https://github.com/jarro2783/cxxopts.git
