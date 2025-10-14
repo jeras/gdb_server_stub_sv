@@ -34,6 +34,7 @@ namespace rsp {
     public:
         // constructor
         Packet(std::string_view name) : Socket(name) { };
+        Packet(std::uint16_t port) : Socket(port) { };
 
         // handling packets
         std::string_view rx (bool acknowledge);

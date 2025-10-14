@@ -44,7 +44,7 @@ namespace rsp {
         int m_clientFd;
 
         // create a UNIX socket and mark it as passive
-        void listenUnix (std::string_view);
+        void listenUnix (std::string_view name);
         // create a TCP socket and mark it as passive
         void listenTcp (const std::uint16_t port);
         // accept UNIX socket connection from client
@@ -55,6 +55,7 @@ namespace rsp {
     protected:
         // constructor
         Socket(std::string_view name);
+        Socket(std::uint16_t port);
         // destructor
         ~Socket();
 
@@ -65,9 +66,9 @@ namespace rsp {
         void accept ();
 
         // transmitter
-        ssize_t send (std::span<const std::byte>, int flags) const;
+        ssize_t send (std::span<const std::byte> data, int flags) const;
         // receiver
-        ssize_t recv (std::span<      std::byte>, int flags) const;
+        ssize_t recv (std::span<      std::byte> data, int flags) const;
     };
 
 }

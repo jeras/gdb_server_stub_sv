@@ -31,6 +31,9 @@ int main(int argc, char* argv[]) {
     std::uint16_t tcp_port;
     std::string unix_socket;
 
+    SystemHdlDb shadow { };
+    ProtocolHdlDb protocol;
+
     try {
         auto result{ options.parse(argc, argv) };
         if (result.count("help")) {
@@ -38,7 +41,8 @@ int main(int argc, char* argv[]) {
                 return 0;
         }
         if (result.count("port")) {
-            tcp_port = result["port"].as<std::uint16_t>();
+            std::uint16_t tcp_port = result["port"].as<std::uint16_t>();
+            protocol = ProtocolHdlDb(tcp_port, shadow);
             std::println("Server will listen on TCP port {}.", tcp_port);
         }
         if (result.count("socket")) {
@@ -51,9 +55,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    SystemHdlDb shadow { };
-
-    ProtocolHdlDb protocol { "1234", shadow };
 
     protocol.loop();
 

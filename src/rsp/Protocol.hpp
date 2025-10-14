@@ -54,7 +54,8 @@ namespace rsp {
 
     public:
         // constructor/destructor
-        Protocol (std::string_view, SHADOW);
+        Protocol (std::string_view name, SHADOW shadow);
+        Protocol (std::uint16_t port, SHADOW shadow);
         ~Protocol ();
 
         std::string_view rx ();
@@ -121,8 +122,13 @@ namespace rsp {
     Protocol<XLEN, SHADOW>::Protocol (std::string_view name, SHADOW shadow) :
         Packet(name),
         m_shadow(shadow)
-    {
-    }
+    { }
+
+    template <typename XLEN, typename SHADOW>
+    Protocol<XLEN, SHADOW>::Protocol (std::uint16_t port, SHADOW shadow) :
+        Packet(port),
+        m_shadow(shadow)
+    { }
 
     template <typename XLEN, typename SHADOW>
     Protocol<XLEN, SHADOW>::~Protocol () { };

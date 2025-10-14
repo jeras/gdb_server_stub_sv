@@ -31,15 +31,18 @@
 
 namespace rsp {
 
-    // open connection from client
+    // open UNIX socket server
     Socket::Socket (std::string_view name) {
-        if (name[0] == ':') {
-            listenTcp(static_cast<uint16_t>(std::stoi(name.data()+1)));
-            m_tcp = true;
-        } else {
-            listenUnix(name);
-            m_tcp = false;
-        }
+        listenUnix(name);
+        m_tcp = false;
+        accept();
+    }
+
+    // open TCP port server
+    Socket::Socket (std::uint16_t port) {
+        listenTcp(port);
+//        static_cast<uint16_t>(std::stoi(name.data()+1)));
+        m_tcp = true;
         accept();
     }
 
