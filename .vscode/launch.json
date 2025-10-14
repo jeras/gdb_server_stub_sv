@@ -14,6 +14,17 @@
             "stopAtEntry": false,
             "preLaunchTask": "Meson: Build all targets",
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "hdldb - Build and debug",
+            "request": "launch",
+            "type": "cppdbg",
+            "envFile": "${workspaceFolder}/${config:mesonbuild.buildFolder}/meson-vscode.env",
+            "program": "${workspaceFolder}/${config:mesonbuild.buildFolder}/hdldb",
+            "args": [],
+            "stopAtEntry": false,
+            "preLaunchTask": "Meson: Build all targets",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

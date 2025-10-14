@@ -48,9 +48,14 @@ namespace shadow {
 //        System () = default;
 //        ~System () = default;
 
-//        // memory read/write
-//        std::span<std::byte> read (const int, const XLEN, const std::size_t);
-//        void                 write(const int, const XLEN, const std::span<std::byte>);
+        // memory read/write
+        std::span<std::byte> mem_read (const int, const XLEN, const std::size_t);
+        void                 mem_write(const int, const XLEN, const std::span<std::byte>);
     };
+
+    template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
+    std::span<std::byte> System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>mem_read (const int, const XLEN, const std::size_t) {
+        m_mmap
+    }
 
 };

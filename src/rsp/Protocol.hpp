@@ -58,9 +58,11 @@ namespace rsp {
         Protocol (std::uint16_t port, SHADOW shadow);
         ~Protocol ();
 
+        // communication
         std::string_view rx ();
         void tx (std::string_view);
 
+        // conversion
         std::vector<std::byte> hex2bin (std::string_view hex) const;
         std::string bin2hex (std::span<std::byte> bin) const;
         std::string bin2hex (std::string_view str) const;
@@ -106,15 +108,15 @@ namespace rsp {
         void query_monitor       (std::string_view);
         void query_monitor_reply (std::string_view);
 
-        std::string format_thread (int, int);
-        int parse_thread  (std::string_view);
+        std::string thread_format (int, int);
+        int thread_parse  (std::string_view);
 
         // dummy placeholders
         // DUT
         void                 dut_reset_assert() {};
-        std::span<std::byte> dut_mem_read (XLEN) { return {}; };
-        void                 dut_mem_write (XLEN, std::span<std::byte>) {};
-        XLEN                 dut_reg_read (int unsigned) { return 0; };
+        std::span<std::byte> dut_mem_read  (XLEN addr, XLEN size) { return {}; };
+        void                 dut_mem_write (XLEN addr, std::span<std::byte>) {};
+        XLEN                 dut_reg_read  (int unsigned) { return 0; };
         void                 dut_reg_write (int unsigned, XLEN) {};
     };
 
@@ -133,6 +135,10 @@ namespace rsp {
     template <typename XLEN, typename SHADOW>
     Protocol<XLEN, SHADOW>::~Protocol () { };
 
+    ////////////////////////////////////////
+    // communication
+    ////////////////////////////////////////
+
     template <typename XLEN, typename SHADOW>
     std::string_view Protocol<XLEN, SHADOW>::rx () {
         return Packet::rx(m_state.acknowledge);
@@ -144,7 +150,7 @@ namespace rsp {
     }
 
     ////////////////////////////////////////
-    // conversion between std::byte and HEX
+    // conversion
     ////////////////////////////////////////
 
     template <typename XLEN, typename SHADOW>
@@ -208,7 +214,7 @@ namespace rsp {
         }
         // thread
         if (thread != -1) {
-            str += std::format(";thread:{}", format_thread(1, thread));
+            str += std::format(";thread:{}", thread_format(1, thread));
         }
         // core
         if (core != -1) {
@@ -265,6 +271,37 @@ namespace rsp {
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::console_output (std::string_view text) {
         tx(std::format("O{}", bin2hex(text)));
+    }
+
+    ///////////////////////////////////////
+    // RSP thread
+    ///////////////////////////////////////
+
+    template <typename XLEN, typename SHADOW>
+    std::string Protocol<XLEN, SHADOW>::thread_format (int process, int thread) {
+        switch (m_features_server["multiprocess"][0]) {
+            case '+': return std::format("p{:x},{:x}", process, thread);
+            case '-': return std::format("{:0x}", thread);
+        }
+    }
+
+    template <typename XLEN, typename SHADOW>
+    int Protocol<XLEN, SHADOW>::thread_parse (std::string_view str) {
+        int code;
+        int process;
+        int thread;
+        switch (m_features_server["multiprocess"][0]) {
+            case '+': code = std::sscanf(str.data(), "p%x,%x;", &process, &thread);
+            case '-': code = std::sscanf(str.data(), "%x", &thread);
+        }
+        return(thread);
+    }
+
+    template <typename XLEN, typename SHADOW>
+    void Protocol<XLEN, SHADOW>::thread (std::string_view packet) {
+        std::string str;
+
+        // TODO
     }
 
     ///////////////////////////////////////
@@ -374,27 +411,6 @@ namespace rsp {
 //        tx(response | std::views::join_with(';'));
     }
 
-
-    template <typename XLEN, typename SHADOW>
-    std::string Protocol<XLEN, SHADOW>::format_thread (int process, int thread) {
-        switch (m_features_server["multiprocess"][0]) {
-            case '+': return std::format("p{:x},{:x}", process, thread);
-            case '-': return std::format("{:0x}", thread);
-        }
-    }
-
-    template <typename XLEN, typename SHADOW>
-    int Protocol<XLEN, SHADOW>::parse_thread (std::string_view str) {
-        int code;
-        int process;
-        int thread;
-        switch (m_features_server["multiprocess"][0]) {
-            case '+': code = std::sscanf(str.data(), "p%x,%x;", &process, &thread);
-            case '-': code = std::sscanf(str.data(), "%x", &thread);
-        }
-        return(thread);
-    }
-
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::query (std::string_view packet) {
         std::string str;
@@ -443,7 +459,7 @@ namespace rsp {
         // query first thread info
         if (packet == "qC") {
             int thr = 1;
-            tx("QC" + format_thread(1, thr));
+            tx("QC" + thread_format(1, thr));
         } else
         // query whether the remote server attached to an existing process or created a new process
         if (packet == "qAttached") {
@@ -726,6 +742,7 @@ namespace rsp {
             case 'G': reg_writeall(packet);
             case 'p': reg_readone (packet);
             case 'P': reg_writeone(packet);
+            case 'H': thread      (packet);
             case 's':
             case 'S': run_step    (packet);
             case 'c':
@@ -752,7 +769,12 @@ namespace rsp {
 
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::loop () {
+        std::string_view packet;
         std::println("Hello from HDLDB!");
+        do {
+            packet = rx();
+            parse(packet);
+        } while (true);
     }
 
 };

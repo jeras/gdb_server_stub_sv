@@ -14,7 +14,7 @@ def scan_packet (packet: bytes) -> str:
     return packet_payload.decode()
 
 # Set the path for the Unix socket
-socket_path = '../../unix-socket'
+socket_path = 'unix-socket'
 
 # Create the Unix socket client
 client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
