@@ -68,7 +68,8 @@ namespace rsp {
         std::vector<std::byte> hex2bin (std::string_view hex) const;
         std::string bin2hex (std::span<std::byte> bin) const;
         std::string bin2hex (std::string_view str) const;
-        constexpr size_t lit2hash (std::string_view str) const;
+//        constexpr auto lit2hash (std::string_view str) const;
+        unsigned int constexpr lit2hash(char const* input);
 
         // packet parsers
         void mem_read    (std::string_view packet);
@@ -185,9 +186,14 @@ namespace rsp {
         return hex.str();
     }
 
+//    template <typename XLEN, typename SHADOW>
+//    auto constexpr Protocol<XLEN, SHADOW>::lit2hash (std::string_view str) const {
+//        return std::hash<std::string_view>{}(str);
+//    }
+
     template <typename XLEN, typename SHADOW>
-    constexpr size_t Protocol<XLEN, SHADOW>::lit2hash (std::string_view str) const {
-        return std::hash<std::string_view>{}(str);
+    unsigned int constexpr Protocol<XLEN, SHADOW>::lit2hash(char const* input) {
+        return *input ? static_cast<unsigned int>(*input) + 33 * lit2hash(input + 1) : 5381;
     }
 
     ///////////////////////////////////////
