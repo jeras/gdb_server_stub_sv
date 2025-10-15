@@ -23,6 +23,7 @@
 #include <utility>
 
 // HDLDB includes
+#include <rsp.hpp>
 //#include "Instruction.hpp"
 #include "Core.hpp"
 #include "Points.hpp"
@@ -48,14 +49,45 @@ namespace shadow {
 //        System () = default;
 //        ~System () = default;
 
+        // register read/write
+        std::span<std::byte> reg_readAll (const rsp::ThreadId threadId);
+        void                 reg_writeAll(const rsp::ThreadId threadId, const std::span<std::byte> data);
+        std::span<std::byte> reg_readOne (const rsp::ThreadId threadId, const unsigned int index);
+        void                 reg_writeOne(const rsp::ThreadId threadId, const unsigned int index, const std::span<std::byte> data);
+
         // memory read/write
-        std::span<std::byte> mem_read (const int, const XLEN, const std::size_t);
-        void                 mem_write(const int, const XLEN, const std::span<std::byte>);
+        std::span<std::byte> mem_read (const rsp::ThreadId threadId, const XLEN addr, const std::size_t size);
+        void                 mem_write(const rsp::ThreadId threadId, const XLEN addr, const std::span<std::byte> data);
     };
 
     template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
-    std::span<std::byte> System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>mem_read (const int, const XLEN, const std::size_t) {
-        m_mmap
+    std::span<std::byte> System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::reg_readAll (const rsp::ThreadId threadId) {
+        return m_core.readAll();
     }
 
-};
+    template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
+    void System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::reg_writeAll (const rsp::ThreadId threadId, const std::span<std::byte> data) {
+        m_core.writeAll(data);
+    }
+
+    template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
+    std::span<std::byte> System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::reg_readOne (const rsp::ThreadId threadId, const unsigned int index) {
+        return m_core.readAll(, size);
+    }
+
+    template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
+    void System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::reg_writeOne (const rsp::ThreadId threadId, const unsigned int index, const std::span<std::byte> data) {
+        m_core.writeAll(addr, data);
+    }
+
+    template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
+    std::span<std::byte> System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::mem_read (const rsp::ThreadId threadId, const XLEN addr, const std::size_t size) {
+        return m_core.read(addr, size);
+    }
+
+    template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
+    void System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::mem_write (const rsp::ThreadId threadId, const XLEN addr, const std::span<std::byte> data) {
+        m_core.write(addr, data);
+    }
+
+}

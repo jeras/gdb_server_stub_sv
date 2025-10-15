@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
             protocol = std::make_unique<ProtocolHdlDb>(socket_port, shadow);
             std::println("Server will listen on TCP port {}.", socket_port);
         } else {
-            socket_name = result["socket"].as<std::string>();
+            std::string socket_name = result["socket"].as<std::string>();
             std::println("Server will listen on TCP port {}.", socket_name);
             protocol = std::make_unique<ProtocolHdlDb>(socket_name, shadow);
         }

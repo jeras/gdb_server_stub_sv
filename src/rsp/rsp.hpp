@@ -1,0 +1,19 @@
+///////////////////////////////////////////////////////////////////////////////
+// remote serial protocol
+//
+// Copyright 2025 Iztok Jeras <iztok.jeras@gmail.com>
+//
+// Licensed under CERN-OHL-P v2 or later
+///////////////////////////////////////////////////////////////////////////////
+
+// C++ includes
+#include <utility>
+
+namespace rsp {
+
+    struct ThreadId {
+        int pid;
+        int tid; 
+    };
+
+}

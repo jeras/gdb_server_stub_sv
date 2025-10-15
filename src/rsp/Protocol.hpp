@@ -50,6 +50,8 @@ namespace rsp {
         };
         std::map<std::string, std::string> m_features_client { };
 
+        std::map<char, ThreadId> m_operation { };
+
         SHADOW m_shadow;
 
     public:
@@ -76,6 +78,7 @@ namespace rsp {
         void reg_readone (std::string_view packet);
         void reg_writeone(std::string_view packet);
         void point       (std::string_view packet);
+        void thread      (std::string_view packet);
 
         void run_step    (std::string_view packet);
         void run_continue(std::string_view packet);
@@ -108,8 +111,8 @@ namespace rsp {
         void query_monitor       (std::string_view);
         void query_monitor_reply (std::string_view);
 
-        std::string thread_format (int, int);
-        int thread_parse  (std::string_view);
+        std::string thread_format (ThreadId threadId);
+        ThreadId thread_scan (std::string_view str);
 
         // dummy placeholders
         // DUT
@@ -278,30 +281,27 @@ namespace rsp {
     ///////////////////////////////////////
 
     template <typename XLEN, typename SHADOW>
-    std::string Protocol<XLEN, SHADOW>::thread_format (int process, int thread) {
+    std::string Protocol<XLEN, SHADOW>::thread_format (ThreadId threadId) {
         switch (m_features_server["multiprocess"][0]) {
-            case '+': return std::format("p{:x},{:x}", process, thread);
-            case '-': return std::format("{:0x}", thread);
+            case '+': return std::format("p{:x},{:x}", threadId.pid, threadId.tid);  break;
+            case '-': return std::format("{:0x}", threadId.tid); break;
         }
     }
 
     template <typename XLEN, typename SHADOW>
-    int Protocol<XLEN, SHADOW>::thread_parse (std::string_view str) {
+    ThreadId Protocol<XLEN, SHADOW>::thread_scan (std::string_view str) {
         int code;
-        int process;
-        int thread;
+        ThreadId threadId;
         switch (m_features_server["multiprocess"][0]) {
-            case '+': code = std::sscanf(str.data(), "p%x,%x;", &process, &thread);
-            case '-': code = std::sscanf(str.data(), "%x", &thread);
+            case '+': code = std::sscanf(str.data(), "p%x,%x;", &threadId.pid, &threadId.tid); break;
+            case '-': code = std::sscanf(str.data(), "%x", &threadId.tid); threadId.pid = 1; break;
         }
-        return(thread);
+        return(threadId);
     }
 
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::thread (std::string_view packet) {
-        std::string str;
-
-        // TODO
+        m_operation[packet[1]] = thread_scan(packet.substr(2, packet.size()-1));
     }
 
     ///////////////////////////////////////
@@ -532,7 +532,7 @@ namespace rsp {
         if (m_state.dut_memory) {
             data = dut_mem_read(addr, size);
         } else {
-            data = m_shadow.mem_read(addr, size);
+            data = m_shadow.mem_read(m_operation['m'], addr, size);
         }
     //    std::println("DBG: rsp_mem_read: pkt = %s", pkt);
 
@@ -558,7 +558,7 @@ namespace rsp {
 
         // write memory
 //        dut_mem_write(adr+i,                 dat  ));
-        m_shadow.mem_write(adr, hex2bin(hex));
+        m_shadow.mem_write(m_operation['M'], adr, hex2bin(hex));
 
         // send response
         tx("OK");
@@ -571,13 +571,7 @@ namespace rsp {
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::reg_readall (std::string_view packet) {
         // register value
-        std::span<XLEN> val;
-        // read DUT/shadow
-        if (m_state.dut_register) {
-            val = dut_reg_read();
-        } else {
-            val = m_shadow.reg_read();
-        }
+        std::span<std::byte> val { m_shadow.reg_readAll(m_operation['g']) };
 
         // send response
         std::string_view response { bin2hex(val) };
@@ -591,7 +585,7 @@ namespace rsp {
 
         // write DUT/shadow
         dut_reg_writeall(val);
-        m_shadow.reg_writeall(val);
+        m_shadow.reg_writeAll(m_operation['G'], val);
 
         // send response
         tx("OK");

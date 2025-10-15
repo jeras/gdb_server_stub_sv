@@ -30,7 +30,7 @@
 namespace shadow {
 
     template <typename REGS, typename MMAP, typename POINT>
-    class Core : REGS, MMAP, POINT {
+    class Core : public REGS, public MMAP, public POINT {
 
         // instruction counter
         size_t     cnt = 0;

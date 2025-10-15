@@ -35,7 +35,6 @@ namespace shadow {
         // TODO: E extension
         // const auto NGPR = extE ? 16 : 32;
 
-    private:
         // register files
         std::array<XLEN,   32> m_gpr;  // GPR (general purpose register file)
                    XLEN        m_pc;   // PC  (program counter)
@@ -43,6 +42,7 @@ namespace shadow {
         std::array<VLEN,   32> m_vec;  // CSR (configuration status registers)
         std::array<XLEN, 4096> m_csr;  // CSR (configuration status registers)
 
+    public:
         // DUT access
         XLEN writeGpr (const unsigned int, const XLEN);
         XLEN readGpr  (const unsigned int) const;
