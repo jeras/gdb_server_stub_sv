@@ -30,7 +30,6 @@ namespace rsp {
         struct State {
             bool acknowledge;
             bool extended;
-            bool dut_register;
             bool dut_memory;
             bool remote_log;
         };
@@ -66,8 +65,9 @@ namespace rsp {
 
         // conversion
         std::vector<std::byte> hex2bin (std::string_view hex) const;
-        std::string bin2hex (std::span<std::byte> bin) const;
-        std::string bin2hex (std::string_view str) const;
+        std::string            hex2str (std::string_view hex) const;
+        std::string            bin2hex (std::span<std::byte> bin) const;
+        std::string            str2hex (std::string_view str) const;
 //        constexpr auto lit2hash (std::string_view str) const;
         unsigned int constexpr lit2hash(char const* input);
 
@@ -120,8 +120,6 @@ namespace rsp {
         void                 dut_reset_assert() {};
         std::span<std::byte> dut_mem_read  (XLEN addr, XLEN size) { return {}; };
         void                 dut_mem_write (XLEN addr, std::span<std::byte>) {};
-        XLEN                 dut_reg_read  (int unsigned) { return 0; };
-        void                 dut_reg_write (int unsigned, XLEN) {};
     };
 
     template <typename XLEN, typename SHADOW>
@@ -159,13 +157,24 @@ namespace rsp {
 
     template <typename XLEN, typename SHADOW>
     std::vector<std::byte> Protocol<XLEN, SHADOW>::hex2bin (std::string_view hex) const {
-        std::vector<std::byte> bin { hex.size()/2 };
-        for (size_t i = 0; i < hex.length(); i += 2) {
-            std::string_view str = hex.substr(i, 2);
-            std::byte byte = static_cast<std::byte>(std::stoi(str.data(), nullptr, 16));
-            bin.push_back(byte);
-        }
+        std::vector<std::byte> bin ( hex.size()/2 );
+//        for (size_t i = 0; i < hex.length(); i += 2) {
+//            std::string_view str = hex.substr(i, 2);
+//            std::byte byte = static_cast<std::byte>(std::stoi(str.data(), nullptr, 16));
+//            bin.push_back(byte);
+//        }
         return bin;
+    }
+
+    template <typename XLEN, typename SHADOW>
+    std::string Protocol<XLEN, SHADOW>::hex2str (std::string_view hex) const {
+        std::string str ( hex.size()/2, ' ' );
+//        for (size_t i = 0; i < hex.length(); i += 2) {
+//            std::string_view str = hex.substr(i, 2);
+//            std::byte byte = static_cast<std::byte>(std::stoi(str.data(), nullptr, 16));
+//            bin.push_back(byte);
+//        }
+        return str;
     }
 
     template <typename XLEN, typename SHADOW>
@@ -178,9 +187,9 @@ namespace rsp {
     }
 
     template <typename XLEN, typename SHADOW>
-    std::string Protocol<XLEN, SHADOW>::bin2hex (std::string_view bin) const {
+    std::string Protocol<XLEN, SHADOW>::str2hex (std::string_view str) const {
         std::ostringstream hex;
-        for (auto& element: bin) {
+        for (auto& element: str) {
             hex << std::format("{:02x}", element);
         }
         return hex.str();
@@ -231,22 +240,22 @@ namespace rsp {
         }
         // reason
         switch (m_shadow.reason.ptype) {
-            case shadow::PointType::watch:
+            case rsp::PointType::watch:
                 str += std::format(";{}:{:x}", "watch", m_shadow.ret.lsu.adr);
                 break;
-            case shadow::PointType::rwatch:
+            case rsp::PointType::rwatch:
                 str += std::format(";{}:{:x}", "rwatch", m_shadow.ret.lsu.adr);
                 break;
-            case shadow::PointType::awatch:
+            case rsp::PointType::awatch:
                 str += std::format(";{}:{:x}", "awatch", m_shadow.ret.lsu.adr);
                 break;
-            case shadow::PointType::swbreak:
+            case rsp::PointType::swbreak:
                 str += std::format(";{}:", "swbreak");
                 break;
-            case shadow::PointType::hwbreak:
+            case rsp::PointType::hwbreak:
                 str += std::format(";{}:", "hwbreak");
                 break;
-            case shadow::PointType::replaylog:
+            case rsp::PointType::replaylog:
                 str += std::format(";{}:{}", "replaylog", m_shadow.cnt == 0 ? "begin" : "end");
                 break;
         }
@@ -330,7 +339,6 @@ namespace rsp {
                 query_monitor_reply("HELP: Available monitor commands:\n"
                     "* 'set remote log on/off',\n"
                     "* 'set waveform dump on/off',\n"
-                    "* 'set register=dut/shadow' (reading registers from dut/shadow, default is shadow),\n"
                     "* 'set memory=dut/shadow' (reading memories from dut/shadow, default is shadow),\n"
                     "* 'reset assert' (assert reset for a few clock periods),\n"
                     "* 'reset release' (synchronously release reset).");
@@ -350,14 +358,6 @@ namespace rsp {
             case lit2hash("set waveform dump off"):
 //                $dumpoff;
                 query_monitor_reply("Disabled waveform dumping.\n");
-                break;
-            case lit2hash("set register=dut"):
-                m_state.dut_register = true;
-                query_monitor_reply("Reading registers directly from DUT.\n");
-                break;
-            case lit2hash("set register=shadow"):
-                m_state.dut_register = false;
-                query_monitor_reply("Reading registers from shadow copy.\n");
                 break;
             case lit2hash("set memory=dut"):
                 m_state.dut_memory = true;
@@ -408,9 +408,9 @@ namespace rsp {
 //        std::vector<std::string> response { };
 //        foreach (m_features_server[feature]) {
 //            if (m_features_server[feature] inside {"+", "-", "?"}) {
-//                response = std::format("{ }{ };", feature, m_features_server[feature]);
+//                response = std::format("{}{};", feature, m_features_server[feature]);
 //            } else {
-//                response = std::format("{ }={ };", feature, m_features_server[feature])};
+//                response = std::format("{}={};", feature, m_features_server[feature])};
 //            }
 //        }
 //        // remove the trailing semicolon
@@ -428,7 +428,7 @@ namespace rsp {
         } else
         // parse various monitor packets
         if (std::sscanf(packet.data(), "qRcmd,%s", str.data()) > 0) {
-            query_monitor(hex2bin(str));
+            query_monitor(hex2str(str));
         } else
         // start no acknowledge mode
         if (packet == "QStartNoAckMode") {
@@ -457,7 +457,7 @@ namespace rsp {
             tx("l");
         } else
         // query extra info for given thread
-        if (std::sscanf(packet.data(), "qThreadExtraInfo,%s", str) > 0) {
+        if (std::sscanf(packet.data(), "qThreadExtraInfo,%s", str.data()) > 0) {
 //            int thread = sscan_thread(str);
 //            std::println("DEBUG: qThreadExtraInfo: str = {}, thread = {:0d}, THREADS[{:0d}-1] = {}", str, thread, thread, THREADS[thread-1]);
 //            tx(bin2hex(THREADS[thr-1]));
@@ -465,7 +465,7 @@ namespace rsp {
         // query first thread info
         if (packet == "qC") {
             int thr = 1;
-            tx("QC" + thread_format(1, thr));
+            tx("QC" + thread_format({1, thr}));
         } else
         // query whether the remote server attached to an existing process or created a new process
         if (packet == "qAttached") {
@@ -577,7 +577,7 @@ namespace rsp {
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::reg_readall (std::string_view packet) {
         // register value
-        std::span<std::byte> val { m_shadow.reg_readAll(m_operation['g']) };
+        auto val { m_shadow.reg_readAll(m_operation['g']) };
 
         // send response
         std::string_view response { bin2hex(val) };
@@ -587,10 +587,10 @@ namespace rsp {
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::reg_writeall(std::string_view packet) {
         // register value
-        std::span<XLEN> val { static_cast<XLEN>(hex2bin(packet.substr(1, packet.size()-1))) };
+        auto val { hex2bin(packet.substr(1, packet.size()-1)) };
 
         // write DUT/shadow
-        dut_reg_writeall(val);
+//        dut_reg_writeall(val);
         m_shadow.reg_writeAll(m_operation['G'], val);
 
         // send response
@@ -608,15 +608,10 @@ namespace rsp {
         int status = std::sscanf(packet.data(), "p%x", &idx);
 
         // read DUT/shadow
-        XLEN val;
-        if (m_state.dut_register) {
-            val = dut_reg_read(idx);
-        } else {
-            val = m_shadow.reg_readone(idx);
-        }
+        auto val = m_shadow.reg_readOne(m_operation['p'], idx);
 
         // send response
-        std::string_view response { bin2hex({ &val, sizeof(XLEN)}) };
+        std::string_view response { bin2hex(val) };
         tx(response);
     };
 
@@ -627,16 +622,15 @@ namespace rsp {
         int status = std::sscanf(packet.data(), "P%x=", &idx);
 
         // register value
-        XLEN val = static_cast<XLEN>(hex2bin(packet.substr(packet.size()-sizeof(XLEN), sizeof(XLEN))));
+        auto val = hex2bin(packet.substr(packet.size()-sizeof(XLEN), sizeof(XLEN)));
 
         // write DUT/shadow
-        dut_reg_writeone(idx, val);
-        m_shadow.reg_writeone(idx, val);
+        m_shadow.reg_writeOne(m_operation['P'], idx, val);
         // debug
-        switch (sizeof(XLEN)*8) {
-            case 32: std::cout << std::format("DEBUG: GPR[{0d}] <= 32'h{08x}", idx, val);
-            case 64: std::cout << std::format("DEBUG: GPR[{0d}] <= 64'h{016x}", idx, val);
-        }
+//        switch (sizeof(XLEN)*8) {
+//            case 32: std::cout << std::format("DEBUG: GPR[{:0d}] <= 32'h{:08x}", idx, val);
+//            case 64: std::cout << std::format("DEBUG: GPR[{:0d}] <= 64'h{:016x}", idx, val);
+//        }
 
         // send response
         tx("OK");
@@ -664,19 +658,19 @@ namespace rsp {
     void Protocol<XLEN, SHADOW>::point (std::string_view packet) {
         int status;
         char command;
-        typename SHADOW::ptype_t type;
-                 XLEN            addr;
-        typename SHADOW::pkind_t kind;
+        rsp::PointType type;
+        XLEN           addr;
+        rsp::PointKind kind;
 
         switch (sizeof(XLEN)*8) {
-            case 32: status = std::sscanf(packet.data(), "[zZ]%x,%8x,%x", &command, &type, &addr, &kind);
-            case 64: status = std::sscanf(packet.data(), "[zZ]%x,%16x,%x", &command, &type, &addr, &kind);
+            case 32: status = std::sscanf(packet.data(), "%c%x,%8x,%x", &command, &type, &addr, &kind);
+            case 64: status = std::sscanf(packet.data(), "%c%x,%16x,%x", &command, &type, &addr, &kind);
         }
 
         // insert/remove
         switch (command) {
-            case 'z': m_shadow.point_remove(type, addr, kind);
-            case 'Z': m_shadow.point_insert(type, addr, kind);
+            case 'z': m_shadow.pointRemove(m_operation[command], type, addr, kind);
+            case 'Z': m_shadow.pointInsert(m_operation[command], type, addr, kind);
         }
 
         // send  response

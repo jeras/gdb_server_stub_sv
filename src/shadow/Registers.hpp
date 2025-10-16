@@ -108,7 +108,7 @@ namespace shadow {
 
     template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
     std::vector<std::byte> RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::readAll () const {
-        std::vector<std::byte> val {};
+        std::vector<std::byte> val ( sizeof(XLEN) * 32 );
 //                    val.append_range({ static_cast<std::byte>(m_gpr.data()), sizeof(XLEN)*m_gpr.size() });
 //        if (EXT_F)  val.append_range({ static_cast<std::byte>(m_fpr.data()), sizeof(FLEN)*m_fpr.size() });
 //        if (EXT_V)  val.append_range({ static_cast<std::byte>(m_vec.data()), sizeof(VLEN)*m_vec.size() });

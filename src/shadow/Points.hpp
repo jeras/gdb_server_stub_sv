@@ -15,26 +15,14 @@
 #include <map>
 
 // HDLDB includes
+#include "rsp.hpp"
 #include "Instruction.hpp"
 
 namespace shadow {
 
-    // point type
-    enum class PointType : int {
-        swbreak   = 0,  // software breakpoint
-        hwbreak   = 1,  // hardware breakpoint
-        watch     = 2,  // write  watchpoint
-        rwatch    = 3,  // read   watchpoint
-        awatch    = 4,  // access watchpoint
-        replaylog = 5,  // reached replay log edge
-        none      = -1  // no reason is given
-    };
-
-    using PointKind = unsigned int;
-
     struct Point {
-        PointType type;
-        PointKind kind;
+        rsp::PointType type;
+        rsp::PointKind kind;
     };
 
     template <typename XLEN, typename FLEN, typename VLEN>
@@ -47,26 +35,26 @@ namespace shadow {
         // reason (point type/kind)
         Point m_reason;
 
-        int insert (const PointType, const XLEN , const PointKind);
-        int remove (const PointType, const XLEN , const PointKind);
+        int insert (const rsp::PointType, const XLEN , const rsp::PointKind);
+        int remove (const rsp::PointType, const XLEN , const rsp::PointKind);
         bool match (Retired<XLEN, FLEN, VLEN> ret);
     };
 
         // RSP insert breakpoint/watchpoint into dictionary
     template <typename XLEN, typename FLEN, typename VLEN>
     int Points<XLEN, FLEN, VLEN>::insert (
-        const PointType type,
-        const XLEN      addr,
-        const PointKind kind
+        const rsp::PointType type,
+        const XLEN           addr,
+        const rsp::PointKind kind
     ) {
         switch (type) {
-            case PointType::swbreak:
-            case PointType::hwbreak:
+            case rsp::PointType::swbreak:
+            case rsp::PointType::hwbreak:
                 m_break.insert(addr) = {type, kind};
                 return m_break.size();
-            case PointType::watch:
-            case PointType::rwatch:
-            case PointType::awatch:
+            case rsp::PointType::watch:
+            case rsp::PointType::rwatch:
+            case rsp::PointType::awatch:
                 m_watch.insert(addr) = {type, kind};
                 return m_watch.size();
             default:
@@ -76,18 +64,18 @@ namespace shadow {
     // RSP remove breakpoint/watchpoint from dictionary
     template <typename XLEN, typename FLEN, typename VLEN>
     int Points<XLEN, FLEN, VLEN>::remove (
-        const PointType type,
-        const XLEN      addr,
-        const PointKind kind
+        const rsp::PointType type,
+        const XLEN           addr,
+        const rsp::PointKind kind
     ) {
         switch (type) {
-            case PointType::swbreak:
-            case PointType::hwbreak:
+            case rsp::PointType::swbreak:
+            case rsp::PointType::hwbreak:
                 m_break.erase(addr);
                 return m_break.size();
-            case PointType::watch:
-            case PointType::rwatch:
-            case PointType::awatch:
+            case rsp::PointType::watch:
+            case rsp::PointType::rwatch:
+            case rsp::PointType::awatch:
                 m_watch.erase(addr);
                 return m_watch.size();
             default:
@@ -126,7 +114,7 @@ namespace shadow {
 
         // match hardware breakpoint
         else if (m_break.contains(addr)) {
-            if (m_break[addr].type == PointType::hwbreak) {
+            if (m_break[addr].type == rsp::PointType::hwbreak) {
                 // signal
                 m_signal = SIGTRAP;
                 // reason
@@ -142,9 +130,9 @@ namespace shadow {
 
         // match hardware breakpoint
         if (m_watch.contains(addr)) {
-            if (((m_watch[addr].ptype == PointType::watch ) && wena) ||
-                ((m_watch[addr].ptype == PointType::rwatch) && rena) ||
-                ((m_watch[addr].ptype == PointType::awatch) )) {
+            if (((m_watch[addr].ptype == rsp::PointType::watch ) && wena) ||
+                ((m_watch[addr].ptype == rsp::PointType::rwatch) && rena) ||
+                ((m_watch[addr].ptype == rsp::PointType::awatch) )) {
                 // TODO: check is transfer size matches
                 // signal
                 m_signal = SIGTRAP;
