@@ -6,6 +6,8 @@ incdir = include_directories('src/rsp', 'src/shadow', 'src', 'submodules/cxxopts
 
 executable('test-vector', 'src/tests/test-vector.cpp')
 
+executable('test-switch', 'src/tests/test-switch.cpp')
+
 hdldb_sources = [
     'src/hdldb.cpp',
     'src/rsp/Socket.cpp',
