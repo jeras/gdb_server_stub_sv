@@ -9,7 +9,9 @@
 #pragma once
 
 // C++ includes
+#include <numeric>
 #include <string>
+#include <string_view>
 #include <map>
 #include <iostream>
 #include <vector>
@@ -18,7 +20,8 @@
 #include <spanstream> // TODO: learn to use this
 
 // HDLDB includes
-#include "Packet.hpp"
+#include <rsp.hpp>
+#include <Packet.hpp>
 #include <Points.hpp>
 
 namespace rsp {
@@ -68,8 +71,6 @@ namespace rsp {
         std::string            hex2str (std::string_view hex) const;
         std::string            bin2hex (std::span<std::byte> bin) const;
         std::string            str2hex (std::string_view str) const;
-//        constexpr auto lit2hash (std::string_view str) const;
-        unsigned int constexpr lit2hash(char const* input);
 
         // packet parsers
         void mem_read    (std::string_view packet);
@@ -195,16 +196,6 @@ namespace rsp {
         return hex.str();
     }
 
-//    template <typename XLEN, typename SHADOW>
-//    auto constexpr Protocol<XLEN, SHADOW>::lit2hash (std::string_view str) const {
-//        return std::hash<std::string_view>{}(str);
-//    }
-
-    template <typename XLEN, typename SHADOW>
-    unsigned int constexpr Protocol<XLEN, SHADOW>::lit2hash(char const* input) {
-        return *input ? static_cast<unsigned int>(*input) + 33 * lit2hash(input + 1) : 5381;
-    }
-
     ///////////////////////////////////////
     // RSP signal
     ///////////////////////////////////////
@@ -326,7 +317,7 @@ namespace rsp {
     // send message to GDB console output
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::query_monitor_reply (std::string_view str) {
-        tx(bin2hex(str));
+        tx(str2hex(str));
     }
 
     // GDB monitor commands
@@ -663,8 +654,8 @@ namespace rsp {
         rsp::PointKind kind;
 
         switch (sizeof(XLEN)*8) {
-            case 32: status = std::sscanf(packet.data(), "%c%x,%8x,%x", &command, &type, &addr, &kind);
-            case 64: status = std::sscanf(packet.data(), "%c%x,%16x,%x", &command, &type, &addr, &kind);
+            case 32: status = std::sscanf(packet.data(), "%c%x,%8x,%x", &command, &std::to_underlying(type), &addr, &kind);
+            case 64: status = std::sscanf(packet.data(), "%c%x,%16x,%x", &command, &std::to_underlying(type), &addr, &kind);
         }
 
         // insert/remove
