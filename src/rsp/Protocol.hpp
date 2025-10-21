@@ -292,6 +292,7 @@ namespace rsp {
             case '+': return std::format("p{:x},{:x}", threadId.pid, threadId.tid);  break;
             case '-': return std::format("{:0x}", threadId.tid); break;
         }
+        return "";
     }
 
     template <typename XLEN, typename SHADOW>
@@ -555,7 +556,8 @@ namespace rsp {
 
         // write memory
 //        dut_mem_write(adr+i,                 dat  ));
-        m_shadow.mem_write(m_operation['M'], adr, hex2bin(hex));
+        auto tmp { hex2bin(hex) };
+        m_shadow.mem_write(m_operation['M'], adr, tmp);
 
         // send response
         tx("OK");
@@ -649,14 +651,16 @@ namespace rsp {
     void Protocol<XLEN, SHADOW>::point (std::string_view packet) {
         int status;
         char command;
+        int            type_tmp;  // std::to_underlying(rsp::PointType)
         rsp::PointType type;
         XLEN           addr;
         rsp::PointKind kind;
 
         switch (sizeof(XLEN)*8) {
-            case 32: status = std::sscanf(packet.data(), "%c%x,%8x,%x", &command, &std::to_underlying(type), &addr, &kind);
-            case 64: status = std::sscanf(packet.data(), "%c%x,%16x,%x", &command, &std::to_underlying(type), &addr, &kind);
+            case 32: status = std::sscanf(packet.data(), "%c%x,%8x,%x", &command, &type_tmp, &addr, &kind);
+            case 64: status = std::sscanf(packet.data(), "%c%x,%16x,%x", &command, &type_tmp, &addr, &kind);
         }
+        type = static_cast<rsp::PointType>(type_tmp);
 
         // insert/remove
         switch (command) {

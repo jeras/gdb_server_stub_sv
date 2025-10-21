@@ -100,17 +100,17 @@ namespace shadow {
     // point insert/remove/match
     template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
     int System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::pointInsert (const rsp::ThreadId threadId, const rsp::PointType, const XLEN , const rsp::PointKind) {
-
+        return 0;
     }
 
     template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
     int System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::pointRemove (const rsp::ThreadId threadId, const rsp::PointType, const XLEN , const rsp::PointKind) {
-
+        return 0;
     }
 
     template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
     bool System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::pointMatch (const rsp::ThreadId threadId, Retired<XLEN, FLEN, VLEN> ret) {
-
+        return false;
     }
 
 }
