@@ -758,11 +758,18 @@ namespace rsp {
 
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::loop () {
+        ssize_t status;
+        std::vector<std::byte> tmp_char (1);
         std::string_view packet;
         std::println("Hello from HDLDB!");
         do {
-            packet = rx();
-            parse(packet);
+            status = Socket::recv(tmp_char, MSG_PEEK);
+            if (tmp_char[0] == static_cast<std::byte>('+')) {
+                Socket::recv(tmp_char);
+            } else {
+                packet = rx();
+                parse(packet);
+            }
         } while (true);
     }
 
