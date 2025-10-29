@@ -30,6 +30,7 @@ namespace shadow {
         std::map<XLEN, Point> m_break;
         std::map<XLEN, Point> m_watch;
 
+    public:
         // signal
         int m_signal = SIGTRAP;
         // reason (point type/kind)

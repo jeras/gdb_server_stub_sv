@@ -107,7 +107,7 @@ namespace rsp {
 
         void rsp_signal          ();
         void stop_reply          (int index = -1, XLEN value = 0,  // register
-                                  int thread = -1, int core = -1);  // thread/core
+                                  ThreadId thread = {1, -1}, int core = -1);  // thread/core
         void error_number_reply  (std::uint8_t value);
         void error_text_reply    (std::string_view text = "");
         void error_lldb_reply    (std::uint8_t value = 0, std::string_view text = "");
@@ -189,7 +189,8 @@ namespace rsp {
         for (auto& element: bin) {
             hex << std::format("{:02x}", static_cast<uint8_t>(element));
         }
-        return hex.str();
+        std::string str { hex.str() };
+        return str;
     }
 
     template <typename XLEN, typename SHADOW>
@@ -215,46 +216,46 @@ namespace rsp {
     // TODO: Send a exception packet "T <value>"
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::stop_reply (int index, XLEN value,  // register
-                                             int thread, int core)  // thread/core
+                                             ThreadId thread, int core)  // thread/core
     {
         // reply with signal/register/thread/core/reason
-        std::string str { std::format("T{:02x}", m_shadow.signal) };
-        // register
-        if (index != -1) {
-            switch (sizeof(XLEN)*8) {
-                case 32: str += std::format(";{:0x}:P{:08x}", index, value);
-                case 64: str += std::format(";{:0x}:P{:016x}", index, value);
-            }
-        }
-        // thread
-        if (thread != -1) {
-            str += std::format(";thread:{}", thread_format(1, thread));
-        }
-        // core
-        if (core != -1) {
-            str += std::format(";core:{:x}", core);
-        }
-        // reason
-        switch (m_shadow.reason.ptype) {
-            case rsp::PointType::watch:
-                str += std::format(";{}:{:x}", "watch", m_shadow.ret.lsu.adr);
-                break;
-            case rsp::PointType::rwatch:
-                str += std::format(";{}:{:x}", "rwatch", m_shadow.ret.lsu.adr);
-                break;
-            case rsp::PointType::awatch:
-                str += std::format(";{}:{:x}", "awatch", m_shadow.ret.lsu.adr);
-                break;
-            case rsp::PointType::swbreak:
-                str += std::format(";{}:", "swbreak");
-                break;
-            case rsp::PointType::hwbreak:
-                str += std::format(";{}:", "hwbreak");
-                break;
-            case rsp::PointType::replaylog:
-                str += std::format(";{}:{}", "replaylog", m_shadow.cnt == 0 ? "begin" : "end");
-                break;
-        }
+        std::string str { std::format("T{:02x}", m_shadow.m_core.m_signal) };
+//          // register
+//        if (index != -1) {
+//            switch (sizeof(XLEN)*8) {
+//                case 32: str += std::format(";{:0x}:P{:08x}", index, value);
+//                case 64: str += std::format(";{:0x}:P{:016x}", index, value);
+//            }
+//        }
+//        // thread
+//        if (thread.pid != -1) {
+//            str += std::format(";thread:{}", thread_format(thread));
+//        }
+//        // core
+//        if (core != -1) {
+//            str += std::format(";core:{:x}", core);
+//        }
+//        // reason
+//        switch (m_shadow.m_core.m_reason.type) {
+//            case rsp::PointType::watch:
+//                str += std::format(";{}:{:x}", "watch", m_shadow.ret.lsu.adr);
+//                break;
+//            case rsp::PointType::rwatch:
+//                str += std::format(";{}:{:x}", "rwatch", m_shadow.ret.lsu.adr);
+//                break;
+//            case rsp::PointType::awatch:
+//                str += std::format(";{}:{:x}", "awatch", m_shadow.ret.lsu.adr);
+//                break;
+//            case rsp::PointType::swbreak:
+//                str += std::format(";{}:", "swbreak");
+//                break;
+//            case rsp::PointType::hwbreak:
+//                str += std::format(";{}:", "hwbreak");
+//                break;
+//            case rsp::PointType::replaylog:
+//                str += std::format(";{}:{}", "replaylog", m_shadow.cnt == 0 ? "begin" : "end");
+//                break;
+//        }
         tx(str);
     //    // reply with signal (current signal by default)
     //    tx(std::format("S{:02x}", m_shadow.signal));
@@ -582,7 +583,7 @@ namespace rsp {
         auto val { m_shadow.reg_readAll(m_operation['g']) };
 
         // send response
-        std::string_view response { bin2hex(val) };
+        auto response { bin2hex(val) };
         tx(response);
     };
 

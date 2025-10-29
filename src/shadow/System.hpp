@@ -33,6 +33,7 @@ namespace shadow {
     template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
     class System {
 
+    public:
         CORE m_core;
 
         MMAP m_mmap;
@@ -44,7 +45,7 @@ namespace shadow {
         // trace queue
         std::vector<Retired<XLEN, FLEN, VLEN>> m_trace;
 
-    public:
+//    public:
 //        // constructor/destructor
 //        System () = default;
 //        ~System () = default;
