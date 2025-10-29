@@ -66,9 +66,9 @@ namespace rsp {
         void accept ();
 
         // transmitter
-        ssize_t send (std::span<const std::byte> data, int flags) const;
+        ssize_t send (std::span<const std::byte> data, int flags = 0) const;
         // receiver
-        ssize_t recv (std::span<      std::byte> data, int flags) const;
+        ssize_t recv (std::span<      std::byte> data, int flags = 0) const;
     };
 
 }
