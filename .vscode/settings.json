@@ -63,7 +63,10 @@
         "text_encoding": "cpp",
         "variant": "cpp",
         "sstream": "cpp",
-        "thread": "cpp"
+        "thread": "cpp",
+        "ranges": "cpp",
+        "spanstream": "cpp",
+        "print": "cpp"
     },
     "C_Cpp.default.compileCommands": "/home/izi/VLSI/rp32/submodules/gdb_server_stub_sv/builddir/compile_commands.json",
     "C_Cpp.default.configurationProvider": "mesonbuild.mesonbuild",

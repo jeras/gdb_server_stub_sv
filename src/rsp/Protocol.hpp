@@ -14,10 +14,12 @@
 #include <string_view>
 #include <map>
 #include <iostream>
-#include <vector>
 #include <print>
 #include <sstream>
 #include <spanstream> // TODO: learn to use this
+#include <vector>
+#include <set>
+#include <ranges>
 
 // HDLDB includes
 #include <rsp.hpp>
@@ -26,12 +28,15 @@
 
 namespace rsp {
 
+    using namespace std;
+
     template <typename XLEN, typename SHADOW>
     class Protocol : Packet {
 
         // server state
         struct State {
-            bool acknowledge;
+            bool enableErrorStrings;
+            bool startNoAckMode;
             bool extended;
             bool dut_memory;
             bool remote_log;
@@ -81,11 +86,11 @@ namespace rsp {
         void reg_writeone(std::string_view packet);
         void point       (std::string_view packet);
         void thread      (std::string_view packet);
+        void signal      (std::string_view packet);
 
         void run_step    (std::string_view packet);
         void run_continue(std::string_view packet);
         void run_backward(std::string_view packet);
-        void signal      (std::string_view packet);
         void reset       ();
 
         void query       (std::string_view packet);
@@ -144,12 +149,12 @@ namespace rsp {
 
     template <typename XLEN, typename SHADOW>
     std::string_view Protocol<XLEN, SHADOW>::rx () {
-        return Packet::rx(m_state.acknowledge);
+        return Packet::rx(!m_state.startNoAckMode);
     }
 
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::tx (std::string_view packet) {
-        Packet::tx(packet, m_state.acknowledge);
+        Packet::tx(packet, !m_state.startNoAckMode);
     }
 
     ////////////////////////////////////////
@@ -202,7 +207,7 @@ namespace rsp {
 
     // in response to '?'
     template <typename XLEN, typename SHADOW>
-    void Protocol<XLEN, SHADOW>::rsp_signal() {
+    void Protocol<XLEN, SHADOW>::signal (std::string_view packet) {
         // reply with current signal
         stop_reply();
     }
@@ -306,9 +311,12 @@ namespace rsp {
         return(threadId);
     }
 
+    // 'H' packet
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::thread (std::string_view packet) {
-        m_operation[packet[1]] = thread_scan(packet.substr(2, packet.size()-1));
+        m_operation[packet[1]] = thread_scan(packet.substr(2, packet.size()-2));
+        // response
+        tx("OK");
     }
 
     ///////////////////////////////////////
@@ -379,34 +387,36 @@ namespace rsp {
     // https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html#General-Query-Packets
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::query_supported (std::string_view str) {
-//        int code;
-//
-//        // parse features supported by the GDB client
-//        for (const auto feature : std::views::split(str, ";"sv)) {
-//            int unsigned len = features[i].len();
-//            // add feature and its value (+/-/?)
-//            char value = feature.back();
-//            if (value inside {"+", "-", "?"}) {
-//                features_gdb[features[i].substr(0, len-2)] = value;
-//            } else {
-//                features[i] = char2space(features[i], '=');
-//                int code = std::sscanf(str, "%s %s", &feature, &value);
-//                features_gdb[features[i].substr(0, len-2)] = value;
-//            }
+        // parse features supported by the GDB/LLDB client
+        for (const auto token : std::views::split(str, ";"sv)) {
+            std::string_view feature { token };
+            auto length = feature.length();
+            // add feature and its value (+/-/?)
+            char value = feature.back();
+            if ((std::set<char> {'+', '-', '?'}).count(value) > 0) {
+                std::string name { feature.substr(0, length-1) };
+                m_features_client[name] = value;
+            } else {
+                auto position = feature.find('=');
+                std::string name  { feature.substr(0, position) };
+                std::string value { feature.substr(position, length-position) };
+                m_features_client[name] = value;
+            }
+        }
+//        for (auto const& [feature, value] : m_features_client) {
+//                std::println("DEBUG: features_client = {}={}", feature, value);
 //        }
-//        std::println("DEBUG: features_gdb = {}", features_gdb);
-//
-//        // reply with stub features
-//        std::vector<std::string> response { };
-//        foreach (m_features_server[feature]) {
-//            if (m_features_server[feature] inside {"+", "-", "?"}) {
-//                response = std::format("{}{};", feature, m_features_server[feature]);
-//            } else {
-//                response = std::format("{}={};", feature, m_features_server[feature])};
-//            }
-//        }
-//        // remove the trailing semicolon
-//        tx(response | std::views::join_with(';'));
+        // reply with stub features
+        std::vector<std::string> response { };
+        for (auto const& [feature, value] : m_features_server) {
+            if ((std::set<char> {'+', '-', '?'}).count(value[0]) > 0) {
+                response.push_back(std::format("{}{}", feature, value));
+            } else {
+                response.push_back(std::format("{}={}", feature, value));
+            }
+        }
+        // join server features with ; separator
+        tx(std::views::join_with(response, ';') | std::ranges::to<std::string>());
     }
 
     template <typename XLEN, typename SHADOW>
@@ -414,30 +424,28 @@ namespace rsp {
         std::string str;
 
         // parse various query packets
-        if (std::sscanf(packet.data(), "qSupported:%s", str.data()) > 0) {
-            std::println("DEBUG: qSupported = {}", str.data());
-            query_supported(str);
+        if (const auto cmd {"qSupported:"sv}; packet.starts_with(cmd)) {
+            query_supported(packet.substr(cmd.length()));
         } else
         // parse various monitor packets
-        if (std::sscanf(packet.data(), "qRcmd,%s", str.data()) > 0) {
-            query_monitor(hex2str(str));
+        if (const auto cmd {"qRcmd,"sv}; packet.starts_with(cmd)) {
+            query_monitor(hex2str(packet.substr(cmd.length())));
         } else
         // start no acknowledge mode
         if (packet == "QStartNoAckMode") {
             tx("OK");
-            m_state.acknowledge = false;
+            m_state.startNoAckMode = true;
         } else
-        // start no acknowledge mode
+        // enable error strings
         if (packet == "QEnableErrorStrings") {
             tx("OK");
-            // TODO
-//            m_state.acknowledge = false;
+            m_state.enableErrorStrings = true;
         } else
         // query first thread info
         if (packet == "qfThreadInfo") {
             str = "m";
 //            foreach (THREADS[thr]) {
-//                str = {str, sformat_thread(1, thr+1), ","};
+//                str = {str, thread_format(1, thr+1), ","};
 //            end
             // remove the trailing comma
 //            str = str.substr(0, str.size()-2);
@@ -449,8 +457,8 @@ namespace rsp {
             tx("l");
         } else
         // query extra info for given thread
-        if (std::sscanf(packet.data(), "qThreadExtraInfo,%s", str.data()) > 0) {
-//            int thread = sscan_thread(str);
+        if (const auto cmd {"qThreadExtraInfo,"sv}; packet.starts_with(cmd)) {
+            ThreadId thread = thread_scan(packet.substr(cmd.length()));
 //            std::println("DEBUG: qThreadExtraInfo: str = {}, thread = {:0d}, THREADS[{:0d}-1] = {}", str, thread, thread, THREADS[thread-1]);
 //            tx(bin2hex(THREADS[thr-1]));
         } else
@@ -486,8 +494,8 @@ namespace rsp {
         } else
         // list actions supported by the ‘vCont?’ packet
         if (packet == "vCont?") {
-            tx("vCont;c:C;s:S");
-        }
+            tx("vCont;c;C;s;S");
+        } else
         // parse 'vCont' packet
         if (std::sscanf(packet.data(), "vCont;%s", str.data()) > 0) {
 //            string_queue_t features;
@@ -503,6 +511,7 @@ namespace rsp {
 //            }
         } else
         // not supported, send empty response packet
+        // also 'vMustReplyEmpty'
         {
             tx("");
         }
@@ -640,9 +649,6 @@ namespace rsp {
     template <typename XLEN, typename SHADOW>
     void Protocol<XLEN, SHADOW>::run_backward(std::string_view packet) {};
 
-    template <typename XLEN, typename SHADOW>
-    void Protocol<XLEN, SHADOW>::signal      (std::string_view packet) {};
-
     ////////////////////////////////////////
     // RSP breakpoints/watchpoints
     ////////////////////////////////////////
@@ -725,28 +731,28 @@ namespace rsp {
         switch (packet[0]) {
         //  case "x": mem_bin_read ();
         //  case "X": mem_bin_write();
-            case 'm': mem_read    (packet);
-            case 'M': mem_write   (packet);
-            case 'g': reg_readall (packet);
-            case 'G': reg_writeall(packet);
-            case 'p': reg_readone (packet);
-            case 'P': reg_writeone(packet);
-            case 'H': thread      (packet);
+            case 'm': mem_read    (packet); break;
+            case 'M': mem_write   (packet); break;
+            case 'g': reg_readall (packet); break;
+            case 'G': reg_writeall(packet); break;
+            case 'p': reg_readone (packet); break;
+            case 'P': reg_writeone(packet); break;
+            case 'H': thread      (packet); break;
+            case '?': signal      (packet); break;
             case 's':
-            case 'S': run_step    (packet);
+            case 'S': run_step    (packet); break;
             case 'c':
-            case 'C': run_continue(packet);
-            case 'b': run_backward(packet);
-            case '?': signal      (packet);
+            case 'C': run_continue(packet); break;
+            case 'b': run_backward(packet); break;
             case 'Q':
-            case 'q': query       (packet);
-            case 'v': verbose     (packet);
+            case 'q': query       (packet); break;
+            case 'v': verbose     (packet); break;
             case 'z':
-            case 'Z': point       (packet);
-            case '!': extended    ();
-            case 'R': reset       ();
-            case 'D': detach      ();
-            case 'k': kill        ();
+            case 'Z': point       (packet); break;
+            case '!': extended    (); break;
+            case 'R': reset       (); break;
+            case 'D': detach      (); break;
+            case 'k': kill        (); break;
             // for unsupported commands respond with empty packet
             default: tx("");
         };

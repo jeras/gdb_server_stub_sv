@@ -27,6 +27,7 @@
 #include <print>
 #include <stdexcept>
 #include <iostream>
+#include <charconv>
 
 // HDLDB includes
 #include "Packet.hpp"
@@ -48,16 +49,17 @@ namespace rsp {
         std::string_view packet { reinterpret_cast<char const*>(m_buffer.data()), static_cast<size_t>(size) };
         std::string_view packet_data     = packet.substr(1, size-4);
         std::string_view packet_checksum = packet.substr(size-2, 2);
-        uint8_t checksum_pkt = static_cast<uint8_t>(std::stoi(packet_checksum.data(), nullptr, 16));
+        int unsigned checksum_packet;
+        auto [ptr, ec] = std::from_chars(packet_checksum.data(), packet_checksum.data()+2, checksum_packet, 16);
 
         log(std::format("REMOTE: <- {}\n", packet_data));
 
         // calculate payload checksum
         std::span payload { reinterpret_cast<uint8_t const*>(packet_data.data()), packet_data.size() };
-        uint8_t checksum_ref { static_cast<uint8_t>(std::accumulate(payload.begin(), payload.end(), 0)) };
+        uint8_t checksum_reference { static_cast<uint8_t>(std::accumulate(payload.begin(), payload.end(), 0)) };
 
         // Verify checksum
-        if (checksum_pkt == checksum_ref) {
+        if (checksum_packet == checksum_reference) {
             if (acknowledge)  send(ACK, 0);
         } else {
             if (acknowledge)  send(NACK, 0);
