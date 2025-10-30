@@ -390,18 +390,18 @@ namespace rsp {
     void Protocol<XLEN, SHADOW>::query_supported (std::string_view str) {
         // parse features supported by the GDB/LLDB client
         for (const auto token : std::views::split(str, ";"sv)) {
-            std::string_view feature { token };
-            auto length = feature.length();
+            std::string_view item { token };
+            auto length = item.length();
             // add feature and its value (+/-/?)
-            char value = feature.back();
+            char value = item.back();
             if ((std::set<char> {'+', '-', '?'}).count(value) > 0) {
-                std::string name { feature.substr(0, length-1) };
-                m_features_client[name] = value;
+                std::string feature { item.substr(0, length-1) };
+                m_features_client[feature] = value;
             } else {
-                auto position = feature.find('=');
-                std::string name  { feature.substr(0, position) };
-                std::string value { feature.substr(position, length-position) };
-                m_features_client[name] = value;
+                auto position = item.find('=');
+                std::string feature { item.substr(0, position) };
+                std::string value   { item.substr(position, length-position) };
+                m_features_client[feature] = value;
             }
         }
 //        for (auto const& [feature, value] : m_features_client) {
@@ -499,18 +499,21 @@ namespace rsp {
             tx("vCont;c;C;s;S");
         } else
         // parse 'vCont' packet
-        if (std::sscanf(packet.data(), "vCont;%s", str.data()) > 0) {
-//            string_queue_t features;
-//            string action;
-//            string thread;
-//            // parse action list
-//            features = split(str, byte'(";"));
-//            foreach (features[i]) {
-//                // parse action/thread pair
-//                features[i] = char2space(features[i], byte'(":"));
-//                int code = $sscanf(features[i], "%s %s", action, thread);
-//                // TODO
-//            }
+        if (const auto cmd {"vCont"sv}; packet.starts_with(cmd)) {
+            auto str { packet.substr(cmd.length()) };
+            for (const auto token : std::views::split(str, ";"sv) | std::views::drop(1)) {
+                std::string_view item { token };
+                char action { item[0] };
+                auto length = item.length();
+                if (item.contains(':') > 0) {
+                    ThreadId thread { thread_scan(item.substr(2, length-2)) };
+                    // TODO
+                } else {
+                    // TODO
+                }
+            }
+            // TODO
+            stop_reply();
         } else
         // not supported, send empty response packet
         // also 'vMustReplyEmpty'
