@@ -444,13 +444,13 @@ namespace rsp {
         } else
         // query first thread info
         if (packet == "qfThreadInfo") {
-            str = "m";
-//            foreach (THREADS[thr]) {
-//                str = {str, thread_format(1, thr+1), ","};
-//            end
-            // remove the trailing comma
-//            str = str.substr(0, str.size()-2);
-            tx(str);
+            // TODO: hendle real number of cores
+            std::vector<std::string> response { };
+            for (int i=0; i<1; i++) {
+                ThreadId thread { 1, i+1 };
+                response.push_back(thread_format(thread));
+            }
+            tx("m"+(std::views::join_with(response, ';') | std::ranges::to<std::string>()));
         } else
         // query subsequent thread info
         if (packet == "qsThreadInfo") {
@@ -465,8 +465,9 @@ namespace rsp {
         } else
         // query first thread info
         if (packet == "qC") {
-            int thr = 1;
-            tx("QC" + thread_format({1, thr}));
+            // TODO
+            ThreadId thread { 1, 1 };
+            tx("QC" + thread_format(thread));
         } else
         // query whether the remote server attached to an existing process or created a new process
         if (packet == "qAttached") {
