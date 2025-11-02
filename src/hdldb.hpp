@@ -15,18 +15,34 @@
 #include <string>
 
 // HDLDB includes
+#include "Registers.hpp"
 #include "System.hpp"
 #include "Protocol.hpp"
 
+
+// 32/64 bit selection
 using XlenHdlDb = std::uint32_t;
 using FlenHdlDb = std::uint32_t;
 using VlenHdlDb = std::uint32_t;  // TODO: placeholder
 
-constexpr std::array<bool, 4096> CsrListHdlDb { false };
+// RISC-V extensions
+constexpr shadow::ExtensionsRiscV ExtHdlDb {
+    .E = false,
+    .F = false,
+    .V = false
+};
 
+// list of target CSR registers
+constexpr std::array<bool, 4096> CsrHdlDb { false };
+
+// RISC-V ISA
+constexpr shadow::IsaRiscV IsaHdlDb { ExtHdlDb, CsrHdlDb };
+
+// registers (CPU state) class
+using RegHdlDb = shadow::RegistersRiscV<XlenHdlDb, FlenHdlDb, VlenHdlDb, IsaHdlDb>;
+
+// breakpoint/watchpoint class
 using PointHdlDb = shadow::Points<XlenHdlDb, FlenHdlDb, VlenHdlDb>;
-
-using RegsHdlDb = shadow::RegistersRiscV<XlenHdlDb, FlenHdlDb, VlenHdlDb, false, false, false, CsrListHdlDb>;
 
 constexpr shadow::AddressBlock<XlenHdlDb> memCore0HdlDb { 0x8000'0000, 0x0001'0000 };
 constexpr shadow::AddressBlock<XlenHdlDb> i_oCore0HdlDb { 0x8001'0000, 0x0001'0000 };
@@ -38,7 +54,7 @@ constexpr shadow::AddressMap<XlenHdlDb, 1, 1> AmapCoreHdlDb { memCoreHdlDb, i_oC
 
 using MmapCoreHdlDb = shadow::MemoryMap<XlenHdlDb, AmapCoreHdlDb>;
 
-using CoreHdlDb = shadow::Core<RegsHdlDb, MmapCoreHdlDb, PointHdlDb>;
+using CoreHdlDb = shadow::Core<RegHdlDb, MmapCoreHdlDb, PointHdlDb>;
 
 constexpr shadow::AddressBlock<XlenHdlDb> memSystem0HdlDb { 0x8002'0000, 0x0001'0000 };
 constexpr shadow::AddressBlock<XlenHdlDb> i_oSystem0HdlDb { 0x8003'0000, 0x0001'0000 };

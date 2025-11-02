@@ -18,18 +18,21 @@
 
 namespace shadow {
 
-    template <
-        // register widths are defined as types
-        typename XLEN,
-        typename FLEN,
-        typename VLEN,
-        // extensions
-        bool EXT_E,  // 16 GPR register file
-        bool EXT_F,  // floating point
-        bool EXT_V,  // vector
+    // RISC-V extensions
+    struct ExtensionsRiscV {
+        bool E;  // 16 GPR register file
+        bool F;  // floating point
+        bool V;  // vector
+    };
+
+    // RISC-V ISA
+    struct IsaRiscV {
+        ExtensionsRiscV EXT;
         // list of target CSR as seen by GDB
-        std::array<bool, 4096> CSR_LIST
-    >
+        std::array<bool, 4096> CSR;
+    };
+
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
     class RegistersRiscV {
         // TODO: E extension
         // const auto NGPR = extE ? 16 : 32;
@@ -62,66 +65,66 @@ namespace shadow {
         std::span<std::byte> readOne (const unsigned int index);
     };
 
-    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    XLEN RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::writeGpr (const unsigned int index, const XLEN val) {
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    XLEN RegistersRiscV<XLEN, FLEN, VLEN, ISA>::writeGpr (const unsigned int index, const XLEN val) {
         return std::exchange(m_gpr[index], val);
     }
 
-    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    XLEN RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::readGpr (const unsigned int index) const {
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    XLEN RegistersRiscV<XLEN, FLEN, VLEN, ISA>::readGpr (const unsigned int index) const {
         return m_gpr[index];
     }
 
-    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    FLEN RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::writeFpr (const unsigned int index, const FLEN val) {
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    FLEN RegistersRiscV<XLEN, FLEN, VLEN, ISA>::writeFpr (const unsigned int index, const FLEN val) {
         return std::exchange(m_fpr[index], val);
     }
 
-    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    FLEN RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::readFpr (const unsigned int index) const {
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    FLEN RegistersRiscV<XLEN, FLEN, VLEN, ISA>::readFpr (const unsigned int index) const {
         return m_fpr[index];
     }
 
-    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    VLEN RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::writeVec (const unsigned int index, const VLEN val) {
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    VLEN RegistersRiscV<XLEN, FLEN, VLEN, ISA>::writeVec (const unsigned int index, const VLEN val) {
         return std::exchange(m_vec[index], val);
     }
 
-    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    VLEN RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::readVec (const unsigned int index) const {
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    VLEN RegistersRiscV<XLEN, FLEN, VLEN, ISA>::readVec (const unsigned int index) const {
         return m_vec[index];
     }
 
 
-    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    XLEN RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::writeCsr (const unsigned int index, const XLEN val) {
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    XLEN RegistersRiscV<XLEN, FLEN, VLEN, ISA>::writeCsr (const unsigned int index, const XLEN val) {
         return std::exchange(m_csr[index], val);
     }
 
-    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    XLEN RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::readCsr (const unsigned int index) const {
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    XLEN RegistersRiscV<XLEN, FLEN, VLEN, ISA>::readCsr (const unsigned int index) const {
         return m_csr[index];
     }
 
-    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    void RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::writeAll (std::span<std::byte> data) {
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    void RegistersRiscV<XLEN, FLEN, VLEN, ISA>::writeAll (std::span<std::byte> data) {
 //        m_gpr.data() = std::array<XLEN, 32> (sizeof(XLEN)*m_gpr.size())
     }
 
-    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    std::span<std::byte> RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::readAll () {
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    std::span<std::byte> RegistersRiscV<XLEN, FLEN, VLEN, ISA>::readAll () {
         std::copy(m_gpr.begin(), m_gpr.end(), m_reg.data());
         m_reg[32] = m_pc;
         // cast from XLEN to std::byte
         return { reinterpret_cast<std::byte *>(m_reg.data()), m_reg.size() * sizeof(XLEN) };
     }
 
-    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    void RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::writeOne (const unsigned int index, std::span<std::byte> data) {
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    void RegistersRiscV<XLEN, FLEN, VLEN, ISA>::writeOne (const unsigned int index, std::span<std::byte> data) {
     }
 
-    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    std::span<std::byte> RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::readOne (const unsigned int index) {
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    std::span<std::byte> RegistersRiscV<XLEN, FLEN, VLEN, ISA>::readOne (const unsigned int index) {
         std::vector<std::byte> val {};
         return static_cast<std::span<std::byte>>(val);
     }
