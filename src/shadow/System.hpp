@@ -51,10 +51,10 @@ namespace shadow {
 //        ~System () = default;
 
         // register read/write
-        std::vector<std::byte> reg_readAll (const rsp::ThreadId threadId);
-        void                   reg_writeAll(const rsp::ThreadId threadId, std::span<std::byte> data);
-        std::vector<std::byte> reg_readOne (const rsp::ThreadId threadId, const unsigned int index);
-        void                   reg_writeOne(const rsp::ThreadId threadId, const unsigned int index, const std::span<std::byte> data);
+        std::span<std::byte> reg_readAll (const rsp::ThreadId threadId);
+        void                 reg_writeAll(const rsp::ThreadId threadId, std::span<std::byte> data);
+        std::span<std::byte> reg_readOne (const rsp::ThreadId threadId, const unsigned int index);
+        void                 reg_writeOne(const rsp::ThreadId threadId, const unsigned int index, const std::span<std::byte> data);
 
         // memory read/write
         std::span<std::byte> mem_read (const rsp::ThreadId threadId, const XLEN addr, const std::size_t size);
@@ -67,7 +67,7 @@ namespace shadow {
     };
 
     template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
-    std::vector<std::byte> System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::reg_readAll (const rsp::ThreadId threadId) {
+    std::span<std::byte> System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::reg_readAll (const rsp::ThreadId threadId) {
         return m_core.readAll();
     }
 
@@ -77,7 +77,7 @@ namespace shadow {
     }
 
     template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
-    std::vector<std::byte> System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::reg_readOne (const rsp::ThreadId threadId, const unsigned int index) {
+    std::span<std::byte> System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::reg_readOne (const rsp::ThreadId threadId, const unsigned int index) {
         return m_core.readOne(index);
     }
 

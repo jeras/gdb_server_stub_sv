@@ -30,7 +30,6 @@ namespace shadow {
         // list of target CSR as seen by GDB
         std::array<bool, 4096> CSR_LIST
     >
-
     class RegistersRiscV {
         // TODO: E extension
         // const auto NGPR = extE ? 16 : 32;
@@ -41,6 +40,9 @@ namespace shadow {
         std::array<FLEN,   32> m_fpr;  // FPR (floating point register file)
         std::array<VLEN,   32> m_vec;  // CSR (configuration status registers)
         std::array<XLEN, 4096> m_csr;  // CSR (configuration status registers)
+
+        // byte arrays used for debugger register reads
+        std::array<XLEN, 32+1> m_reg;
 
     public:
         // DUT access
@@ -55,12 +57,12 @@ namespace shadow {
 
         // RSP access
         void writeAll (std::span<std::byte>);
-        std::vector<std::byte> readAll () const;
+        std::span<std::byte> readAll ();
         void writeOne (const unsigned int index, std::span<std::byte> data);
-        std::vector<std::byte> readOne (const unsigned int index) const;
+        std::span<std::byte> readOne (const unsigned int index);
     };
 
-        template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
+    template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
     XLEN RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::writeGpr (const unsigned int index, const XLEN val) {
         return std::exchange(m_gpr[index], val);
     }
@@ -107,17 +109,11 @@ namespace shadow {
     }
 
     template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    std::vector<std::byte> RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::readAll () const {
-        std::vector<std::byte> val ( sizeof(XLEN) * (32+1) );
-//                    val.append_range({ static_cast<std::byte>(m_gpr.data()), sizeof(XLEN)*m_gpr.size() });
-//        if (EXT_F)  val.append_range({ static_cast<std::byte>(m_fpr.data()), sizeof(FLEN)*m_fpr.size() });
-//        if (EXT_V)  val.append_range({ static_cast<std::byte>(m_vec.data()), sizeof(VLEN)*m_vec.size() });
-//        for (size_t i=0; i<m_csr.size(); i++) {
-//            if (CSR_LIST[i]) {
-//                val.append_range({ static_cast<std::byte>(m_csr[i]), sizeof(XLEN) });
-//            }
-//        }
-        return val;
+    std::span<std::byte> RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::readAll () {
+        std::copy(m_gpr.begin(), m_gpr.end(), m_reg.data());
+        m_reg[32] = m_pc;
+        // cast from XLEN to std::byte
+        return { reinterpret_cast<std::byte *>(m_reg.data()), m_reg.size() * sizeof(XLEN) };
     }
 
     template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
@@ -125,9 +121,9 @@ namespace shadow {
     }
 
     template <typename XLEN, typename FLEN, typename VLEN, bool EXT_E, bool EXT_F, bool EXT_V, std::array<bool, 4096> CSR_LIST>
-    std::vector<std::byte> RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::readOne (const unsigned int index) const {
+    std::span<std::byte> RegistersRiscV<XLEN, FLEN, VLEN, EXT_E, EXT_F, EXT_V, CSR_LIST>::readOne (const unsigned int index) {
         std::vector<std::byte> val {};
-        return val;
+        return static_cast<std::span<std::byte>>(val);
     }
 
 }
