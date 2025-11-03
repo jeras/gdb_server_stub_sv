@@ -35,25 +35,54 @@ namespace shadow {
 //        // constructor/destructor
 //        MemoryMap () = default;
 //        ~MemoryMap () = default;
+
+        // mapping from CPU address space to shadow memory offset
+        XLEN offset (XLEN addr) const;
     public:
-        // memory read/write
+        // memory load/store from CPU
+        template <typename TYPE>
+        TYPE load  (const XLEN addr);
+        template <typename TYPE>
+        void store (const XLEN addr, TYPE data);
+
+        // memory read/write from debugger
         std::span<std::byte> read  (const XLEN addr, const std::size_t size) const;
         void                 write (const XLEN addr, const std::span<std::byte> data);
     };
 
-        // read from shadow memory map
+    // mapping from CPU address space to shadow memory offset
+    template <typename XLEN, AddressMap AMAP>
+    XLEN MemoryMap<XLEN, AMAP>::offset (XLEN addr) const {
+        for (int unsigned blk=0; blk<AMAP.mem.size(); blk++) {
+            if ((addr >= AMAP.mem[blk].base) &&
+                (addr <  AMAP.mem[blk].base + AMAP.mem[blk].size)) {
+                return addr-AMAP.mem[blk].base;
+            };
+        };
+        return { };
+    }
+
+    // memory load/store from CPU
+    template <typename XLEN, AddressMap AMAP>
+    template <typename TYPE>
+    TYPE MemoryMap<XLEN, AMAP>::load (const XLEN addr) {
+        return static_cast<TYPE>(m_mem.data() + offset(addr));
+    }
+
+    template <typename XLEN, AddressMap AMAP>
+    template <typename TYPE>
+    void MemoryMap<XLEN, AMAP>::store (const XLEN addr, TYPE data) {
+        static_cast<TYPE>(m_mem.data() + offset(addr)) = data;
+    }
+
+    // read from shadow memory map
     template <typename XLEN, AddressMap AMAP>
     std::span<std::byte> MemoryMap<XLEN, AMAP>::read (
         const XLEN        addr,
         const std::size_t size
     ) const {
         // reading from an address map block
-        for (int unsigned blk=0; blk<AMAP.mem.size(); blk++) {
-            if ((addr >= AMAP.mem[blk].base) &&
-                (addr <  AMAP.mem[blk].base + AMAP.mem[blk].size)) {
-                return m_mem.subspan(addr-AMAP.mem[blk].base, size);
-            };
-        };
+        return m_mem.subspan(offset(addr), size);
         // reading from an unmapped IO region (reads have higher priority)
         // TODO: handle access to nonexistent entries with a warning?
         // TODO: handle access with a size mismatch
@@ -68,13 +97,7 @@ namespace shadow {
               std::span<std::byte> data
     ) {
         // writing to an address map block
-        for (int unsigned blk=0; blk<AMAP.mem.size(); blk++) {
-            if ((addr >= AMAP.mem[blk].base) &&
-                (addr <  AMAP.mem[blk].base + AMAP.mem[blk].size)) {
-                std::copy(m_mem.data() + (addr - AMAP.mem[blk].base), m_mem.data() + (addr - AMAP.mem[blk].base + data.size()), data.data());
-                return;
-            };
-        };
+        std::copy_n(data.data(), data.size(), m_mem.data() + offset(addr));
         // writing to an unmapped IO region (reads have higher priority)
         // TODO
 //        m_i_o[addr] = data;
