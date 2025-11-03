@@ -36,19 +36,9 @@ namespace rsp {
     // point kind
     using PointKind = unsigned int;
 
+    // simple checksum/hash to be used in switch statements operating on strings
     constexpr auto lit2hash (std::string_view str) {
         return std::accumulate(str.begin(), str.end(), 0);
     }
-//constexpr auto switch_hash(std::string_view str) {
-////    return std::hash<std::string_view>{}(str);
-//    return std::accumulate(str.begin(), str.end(), 0);
-//}
-
-//    template <typename XLEN, typename SHADOW>
-//    unsigned int constexpr Protocol<XLEN, SHADOW>::lit2hash(char const* input) {
-//        return *input ? static_cast<unsigned int>(*input) + 33 * lit2hash(input + 1) : 5381;
-//    }
-
-
 
 }

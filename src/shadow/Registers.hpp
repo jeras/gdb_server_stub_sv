@@ -15,6 +15,7 @@
 #include <array>
 #include <vector>
 #include <span>
+#include <bitset>
 
 namespace shadow {
 
@@ -32,20 +33,43 @@ namespace shadow {
         std::array<bool, 4096> CSR;
     };
 
+    // calculating the lengths for each register file
+    template <IsaRiscV ISA> constexpr std::size_t lenGpr { ISA.EXT.E ? 16 : 32 };  // GPR
+    template <IsaRiscV ISA> constexpr std::size_t lenPc  {              1      };  // PC
+    template <IsaRiscV ISA> constexpr std::size_t lenFpr { ISA.EXT.F ? 32 :  0 };  // FPR
+    template <IsaRiscV ISA> constexpr std::size_t lenVec { ISA.EXT.V ? 32 :  0 };  // VEC
+//  template <IsaRiscV ISA> constexpr std::size_t lenCsr { ISA.CSR.count()     };  // CSR
+    template <IsaRiscV ISA> constexpr std::size_t lenCsr { std::count(ISA.CSR.begin(), ISA.CSR.end(), true) };  // CSR
+
+    // calculating the size of std::byte array for debugger g/G packets
+    template <typename LEN, IsaRiscV ISA> constexpr std::size_t sizeGpr { lenGpr<ISA> * sizeof(LEN) };  // GPR
+    template <typename LEN, IsaRiscV ISA> constexpr std::size_t sizePc  { lenPc <ISA> * sizeof(LEN) };  // PC
+    template <typename LEN, IsaRiscV ISA> constexpr std::size_t sizeFpr { lenFpr<ISA> * sizeof(LEN) };  // FPR
+    template <typename LEN, IsaRiscV ISA> constexpr std::size_t sizeVec { lenVec<ISA> * sizeof(LEN) };  // VEC
+    template <typename LEN, IsaRiscV ISA> constexpr std::size_t sizeCsr { lenCsr<ISA> * sizeof(LEN) };  // CSR
+
+    template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
+    constexpr static std::size_t sizeAll {
+        sizeGpr<XLEN, ISA> + 
+        sizePc <XLEN, ISA> + 
+        sizeFpr<FLEN, ISA> + 
+        sizeVec<VLEN, ISA> + 
+        sizeCsr<VLEN, ISA>
+    };
+
     template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
     class RegistersRiscV {
-        // TODO: E extension
-        // const auto NGPR = extE ? 16 : 32;
+
+        // byte arrays used for debugger g/G packets
+        std::array<std::byte, sizeAll<XLEN, FLEN, VLEN, ISA>> m_all;
 
         // register files
-        std::array<XLEN,   32> m_gpr;  // GPR (general purpose register file)
-                   XLEN        m_pc;   // PC  (program counter)
-        std::array<FLEN,   32> m_fpr;  // FPR (floating point register file)
-        std::array<VLEN,   32> m_vec;  // CSR (configuration status registers)
-        std::array<XLEN, 4096> m_csr;  // CSR (configuration status registers)
-
-        // byte arrays used for debugger register reads
-        std::array<XLEN, 32+1> m_reg;
+        std::span<XLEN> m_gpr { reinterpret_cast<XLEN *>(m_all.data() + 0                                                                               ), lenGpr<ISA> };
+//                XLEN& m_pc  { reinterpret_cast<XLEN *>(m_all.data() + sizeGpr<XLEN, ISA>                                                              )              };
+                  XLEN  m_pc  { 0 };
+        std::span<FLEN> m_fpr { reinterpret_cast<FLEN *>(m_all.data() + sizeGpr<XLEN, ISA> + sizePc<XLEN, ISA>                                          ), lenFpr<ISA> };
+        std::span<VLEN> m_vec { reinterpret_cast<VLEN *>(m_all.data() + sizeGpr<XLEN, ISA> + sizePc<XLEN, ISA> + sizeFpr<FLEN, ISA>                     ), lenVec<ISA> };
+        std::span<XLEN> m_csr { reinterpret_cast<XLEN *>(m_all.data() + sizeGpr<XLEN, ISA> + sizePc<XLEN, ISA> + sizeFpr<FLEN, ISA> + sizeVec<VLEN, ISA>), lenCsr<ISA> };
 
     public:
         // DUT access
@@ -108,15 +132,12 @@ namespace shadow {
 
     template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
     void RegistersRiscV<XLEN, FLEN, VLEN, ISA>::writeAll (std::span<std::byte> data) {
-//        m_gpr.data() = std::array<XLEN, 32> (sizeof(XLEN)*m_gpr.size())
+        std::copy(data.begin(), data.end(), m_all.data());
     }
 
     template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
     std::span<std::byte> RegistersRiscV<XLEN, FLEN, VLEN, ISA>::readAll () {
-        std::copy(m_gpr.begin(), m_gpr.end(), m_reg.data());
-        m_reg[32] = m_pc;
-        // cast from XLEN to std::byte
-        return { reinterpret_cast<std::byte *>(m_reg.data()), m_reg.size() * sizeof(XLEN) };
+        return { m_all.data(), m_all.size() };
     }
 
     template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
@@ -125,8 +146,13 @@ namespace shadow {
 
     template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
     std::span<std::byte> RegistersRiscV<XLEN, FLEN, VLEN, ISA>::readOne (const unsigned int index) {
-        std::vector<std::byte> val {};
-        return static_cast<std::span<std::byte>>(val);
+        int idx = index;
+        if (idx < lenGpr<ISA>)  return { reinterpret_cast<std::byte *>(m_gpr[idx]), sizeof(XLEN) };  idx -= lenGpr<ISA>;
+        if (idx < 1          )  return { reinterpret_cast<std::byte *>(m_pc      ), sizeof(XLEN) };  idx -= 1          ;
+        if (idx < lenFpr<ISA>)  return { reinterpret_cast<std::byte *>(m_fpr[idx]), sizeof(FLEN) };  idx -= lenFpr<ISA>;
+        if (idx < lenVec<ISA>)  return { reinterpret_cast<std::byte *>(m_vec[idx]), sizeof(VLEN) };  idx -= lenVec<ISA>;
+        if (idx < lenCsr<ISA>)  return { reinterpret_cast<std::byte *>(m_csr[idx]), sizeof(XLEN) };  idx -= lenCsr<ISA>;
+        return { std::span<std::byte>{ } };
     }
 
 }

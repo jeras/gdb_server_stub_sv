@@ -13,6 +13,7 @@
 
 // C++ includes
 #include <string>
+#include <bitset>
 
 // HDLDB includes
 #include "Registers.hpp"
