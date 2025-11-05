@@ -41,13 +41,14 @@ namespace shadow {
 //  template <IsaRiscV ISA> constexpr std::size_t lenCsr { ISA.CSR.count()     };  // CSR
     template <IsaRiscV ISA> constexpr std::size_t lenCsr { std::count(ISA.CSR.begin(), ISA.CSR.end(), true) };  // CSR
 
-    // calculating the size of std::byte array for debugger g/G packets
+    // calculating the size of std::byte span for debugger g/G packets
     template <typename LEN, IsaRiscV ISA> constexpr std::size_t sizeGpr { lenGpr<ISA> * sizeof(LEN) };  // GPR
     template <typename LEN, IsaRiscV ISA> constexpr std::size_t sizePc  { lenPc <ISA> * sizeof(LEN) };  // PC
     template <typename LEN, IsaRiscV ISA> constexpr std::size_t sizeFpr { lenFpr<ISA> * sizeof(LEN) };  // FPR
     template <typename LEN, IsaRiscV ISA> constexpr std::size_t sizeVec { lenVec<ISA> * sizeof(LEN) };  // VEC
     template <typename LEN, IsaRiscV ISA> constexpr std::size_t sizeCsr { lenCsr<ISA> * sizeof(LEN) };  // CSR
 
+    // calculating the size of std::byte array of entire core state
     template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
     constexpr static std::size_t sizeAll {
         sizeGpr<XLEN, ISA> + 
@@ -59,7 +60,6 @@ namespace shadow {
 
     template <typename XLEN, typename FLEN, typename VLEN, IsaRiscV ISA>
     class RegistersRiscV {
-
         // byte arrays used for debugger g/G packets
         std::array<std::byte, sizeAll<XLEN, FLEN, VLEN, ISA>> m_all;
 

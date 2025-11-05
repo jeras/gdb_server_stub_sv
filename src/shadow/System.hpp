@@ -21,6 +21,8 @@
 #include <bitset>
 #include <bit>
 #include <utility>
+#include <fstream>
+#include <iterator>
 
 // HDLDB includes
 #include <rsp.hpp>
@@ -34,13 +36,17 @@ namespace shadow {
     class System {
 
     public:
-        CORE m_core;
-
         MMAP m_mmap;
+
+        CORE m_core;
 
         POINT m_point;
 
-        // time
+        // time, unit is 1fs in VHDL and user defined in Verilog
+        std::int64_t time;
+
+        // trace file position
+        std::size_t position;
 
         // trace queue
         std::vector<Retired<XLEN, FLEN, VLEN>> m_trace;
@@ -64,6 +70,9 @@ namespace shadow {
         int pointInsert (const rsp::ThreadId threadId, const rsp::PointType, const XLEN , const rsp::PointKind);
         int pointRemove (const rsp::ThreadId threadId, const rsp::PointType, const XLEN , const rsp::PointKind);
         bool pointMatch (const rsp::ThreadId threadId, Retired<XLEN, FLEN, VLEN> ret);
+
+        // snapshot load
+        void snapshotLoad (const std::string& filename);
     };
 
     template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
@@ -112,6 +121,24 @@ namespace shadow {
     template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
     bool System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::pointMatch (const rsp::ThreadId threadId, Retired<XLEN, FLEN, VLEN> ret) {
         return false;
+    }
+
+
+    template <typename XLEN, typename FLEN, typename VLEN, typename CORE, typename MMAP, typename POINT>
+    void System<XLEN, FLEN, VLEN, CORE, MMAP, POINT>::snapshotLoad (const std::string& filename) {
+        // open input snapshot file in binary mode
+        std::ifstream snapshot { filename, std::ios::binary };
+        std::istreambuf_iterator<char> iter { snapshot };
+        // copy time
+        std::copy_n(iter, sizeof(time), reinterpret_cast<char *>(&time));
+        // copy trace file position
+        std::copy_n(iter, sizeof(position), reinterpret_cast<char *>(&position));
+        // copy registers
+        std::copy_n(iter, m_core.m_all.size(), m_core.m_all.data());
+        // copy core memory
+        std::copy_n(iter, m_core.m_buf.size(), m_core.m_buf.data());
+        // copy system memory
+        // TODO
     }
 
 }
